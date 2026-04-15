@@ -356,7 +356,7 @@
     payerMixPrinciple: "Target commercially insured ages 18-64. 40%+ commercial insurance rate = viable market. Payer mix is the #1 strategic KPI.",
     segmentPriority: "Stable and Seeking Care is the priority segment: largest, highest commercial rate, highest per-patient value, enters through Primary Care.",
     medicareAdvantage: "Census counts MA under Medicare (public), not private. South Florida MA penetration is 60-80%. Commercial numbers from Census exclude MA enrollees.",
-    source: "Segment framework based on Baptist Health consumer segmentation model. All demographic and payer data should come from live Census ACS and web research — never from the segment definitions themselves."
+    source: "Baptist Health consumer segmentation model."
   };
 
   // ── 6. Local Knowledge Base Matching ─────────────────────────────────────
@@ -378,7 +378,7 @@
         md += `${i + 1}. **${BH_SEGMENTS[i].name}** — ${BH_SEGMENTS[i].description}\n`;
       }
       md += `\n### Priority Segment\n${BH_STRATEGY.segmentPriority}\n\n`;
-      md += `*${BH_STRATEGY.source}*`;
+      md += ``;
       return md;
     }
 
@@ -397,7 +397,7 @@
           (seg.name === "Stable and Seeking Care" && /stable.*seeking/i.test(q)) ||
           (seg.name === "Senior Discounts" && /senior\s*discounts/i.test(q)) ||
           (seg.name === "Empty Nests, Full Pockets" && /empty\s*nests|full\s*pockets/i.test(q))) {
-        return formatSegmentProfile(seg) + `\n*Source: ${BH_STRATEGY.source}*`;
+        return formatSegmentProfile(seg) + ``;
       }
     }
 
@@ -442,7 +442,7 @@
 
     // Source / data source
     if (/source.*(segment|data|profile)|where.*(segment|data) (come|from)|who (created|made|prepared).*(segment|profile)|healthgrades/i.test(q)) {
-      return `### Segment Data Source\n\n${BH_STRATEGY.source}`;
+      return `### Segment Framework\n\nThese are Baptist Health's consumer segments used for market targeting and trade area analysis.`;
     }
 
     // Medicare Advantage
