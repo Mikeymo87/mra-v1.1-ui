@@ -315,6 +315,19 @@
     const query = queryInput.value.trim();
     if (!query || sendBtn.disabled) return;
 
+    // Step 0: Smart clarification — catch vague queries before calling the agent
+    if (!window._skipClarification) {
+      const clarification = detectVagueQuery(query);
+      if (clarification) {
+        welcomeEl?.remove();
+        addUserMsg(query);
+        queryInput.value = '';
+        queryInput.style.height = 'auto';
+        addClarificationMsg(query, clarification);
+        return;
+      }
+    }
+
     welcomeEl?.remove();
     addUserMsg(query);
     queryInput.value = '';
@@ -389,6 +402,148 @@
     const bubble = document.createElement('div');
     bubble.className = 'msg-bubble';
     bubble.textContent = text;
+    wrap.append(label, bubble);
+    appendMsg(wrap);
+  }
+
+  // ── Vague query detection ─────────────────────────────────────────────────
+  function detectVagueQuery(query) {
+    const q = query.toLowerCase();
+
+    // Vague location: no care type specified
+    const isLocationQuery = /what\s+(locations?|do we have|is near|sites?)|locations?\s+near|what.*(nearby|in that area|around)/i.test(q);
+    const hasCareType = /urgent|primary|imaging|hospital|surgery|cardio|ortho|pharma|therapy|concierge|emergency|same.day|heart|brain|cancer|sleep/i.test(q);
+    if (isLocationQuery && !hasCareType) {
+      return {
+        type: 'location',
+        question: 'What type of locations are you looking for?',
+        subtitle: 'Select a care type and drive time radius.',
+        options: ['All Locations', 'Urgent Care', 'Primary Care', 'Hospital', 'Imaging', 'Heart & Vascular', 'Orthopedics', 'Surgery', 'Physical Therapy', 'Concierge'],
+        distances: ['5 min', '10 min', '15 min', '20 min', '30 min'],
+        buildQuery: (type, dist, orig) => {
+          const area = orig.replace(/what\s+(locations?|do we have|is near|sites?)|locations?\s+near|what.*(nearby|in that area|around)/gi, '').replace(/[?.!]/g, '').trim() || 'this area';
+          return type === 'All Locations'
+            ? `Find all Baptist Health locations within a ${dist} drive of ${area}`
+            : `Find Baptist Health ${type} locations within a ${dist} drive of ${area}`;
+        }
+      };
+    }
+
+    // Vague demographics: no ZIP or area specified
+    const isDemoQuery = /demograph|payer mix|population|income|insurance|census/i.test(q);
+    const hasGeo = /\d{5}|miami|broward|palm beach|doral|coral gables|brickell|homestead|kendall|hollywood|plantation|pembroke|miramar|boca|boynton|delray|west palm|wellington/i.test(q);
+    if (isDemoQuery && !hasGeo) {
+      return {
+        type: 'demographics',
+        question: 'Which area do you want demographics for?',
+        subtitle: 'Enter a ZIP code or select a market.',
+        options: ['Miami-Dade County', 'Broward County', 'Palm Beach County'],
+        textInput: { placeholder: 'Or enter a ZIP code (e.g. 33131)', key: 'zip' },
+        buildQuery: (selection, _, orig) => {
+          if (/^\d{5}$/.test(selection)) return `${orig} for ZIP ${selection}`;
+          return `${orig} for ${selection}`;
+        }
+      };
+    }
+
+    // Vague competitor query: no geography
+    const isCompQuery = /competitor|competition|who else|what.*urgent care.*in|rival/i.test(q);
+    if (isCompQuery && !hasGeo) {
+      return {
+        type: 'competitor',
+        question: 'Which area should I search for competitors?',
+        subtitle: 'Enter a ZIP, neighborhood, or city.',
+        textInput: { placeholder: 'e.g. Brickell, 33131, Doral, Coral Gables', key: 'area' },
+        buildQuery: (area, _, orig) => `${orig} in ${area}`
+      };
+    }
+
+    return null; // Query is specific enough
+  }
+
+  function addClarificationMsg(originalQuery, config) {
+    const wrap = mkWrap('agent');
+    const label = mkLabel('BH Market Research Agent');
+    const bubble = document.createElement('div');
+    bubble.className = 'msg-bubble';
+
+    let html = `<p><strong>${config.question}</strong></p>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:12px;">${config.subtitle || ''}</p>`;
+
+    // Option buttons (care types, counties, etc.)
+    if (config.options) {
+      html += `<div style="display:flex;flex-wrap:wrap;gap:6px;">
+        ${config.options.map(opt => `<button class="action-btn clarify-btn" data-val="${opt}" style="font-size:12px;padding:6px 14px;">${opt}</button>`).join('')}
+      </div>`;
+    }
+
+    // Distance buttons (for location queries)
+    if (config.distances) {
+      html += `<div style="margin-top:12px;">
+        <p style="font-size:13px;color:var(--muted);">How far out should I look?</p>
+        <div style="display:flex;gap:6px;margin-top:6px;">
+          ${config.distances.map(d => `<button class="action-btn distance-btn" data-val="${d}" style="font-size:12px;padding:6px 12px;">${d}</button>`).join('')}
+        </div>
+      </div>`;
+    }
+
+    // Text input (for ZIP codes, areas)
+    if (config.textInput) {
+      html += `<div style="margin-top:12px;">
+        <input type="text" class="clarify-input" placeholder="${config.textInput.placeholder}"
+          style="border:1.5px solid var(--border);border-radius:8px;padding:8px 12px;font-size:13px;width:280px;outline:none;font-family:inherit;" />
+        <button class="action-btn clarify-submit" style="font-size:12px;padding:7px 16px;margin-left:6px;">Go</button>
+      </div>`;
+    }
+
+    bubble.innerHTML = html;
+
+    let selectedOption = null;
+    let selectedDist = null;
+
+    bubble.querySelectorAll('.clarify-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        bubble.querySelectorAll('.clarify-btn').forEach(b => b.classList.remove('copied'));
+        btn.classList.add('copied');
+        selectedOption = btn.dataset.val;
+        trySubmit();
+      });
+    });
+
+    bubble.querySelectorAll('.distance-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        bubble.querySelectorAll('.distance-btn').forEach(b => b.classList.remove('copied'));
+        btn.classList.add('copied');
+        selectedDist = btn.dataset.val;
+        trySubmit();
+      });
+    });
+
+    const textInputEl = bubble.querySelector('.clarify-input');
+    const submitBtn = bubble.querySelector('.clarify-submit');
+    if (submitBtn) {
+      submitBtn.addEventListener('click', () => {
+        const val = textInputEl?.value.trim();
+        if (val) { selectedOption = val; trySubmit(); }
+      });
+      textInputEl?.addEventListener('keydown', e => {
+        if (e.key === 'Enter') { submitBtn.click(); }
+      });
+    }
+
+    function trySubmit() {
+      // Location queries need both type + distance
+      if (config.distances && (!selectedOption || !selectedDist)) return;
+      // Other queries just need the option/input
+      if (!config.distances && !selectedOption) return;
+
+      const refined = config.buildQuery(selectedOption, selectedDist, originalQuery);
+      queryInput.value = refined;
+      window._skipClarification = true;
+      send();
+      window._skipClarification = false;
+    }
+
     wrap.append(label, bubble);
     appendMsg(wrap);
   }
