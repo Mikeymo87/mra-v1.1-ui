@@ -310,6 +310,321 @@
   // Button click: immediate (intentional action)
   sendBtn.addEventListener('click', send);
 
+  // ── 5. Local Knowledge Base (verified static data) ────────────────────────
+  const BH_SEGMENTS = [
+    {
+      name: "Babies and Bills",
+      size: "315K (7%)",
+      avgAge: 32,
+      commercial: "19%",
+      medianIncome: "$15,000-$19,999",
+      education: "6% college educated",
+      financialStability: "Least Stable",
+      family: "17% married, 27% have children",
+      diversity: "More diverse",
+      retention: "52% (above avg)",
+      avgValue: "$964",
+      householdValue: "$1,051 (9% lift)",
+      topConditions: ["Endocrine Disorders (12%)", "Asthma (7%)", "Substance Related (7%)", "Hypertension (6%)", "Headache/Migraine (6%)"],
+      topRisks: ["Obstetrics (76%)", "Gynecology (18%)", "Neurosciences (15%)", "Trauma (12%)", "Digestive Health (11%)"],
+      payer: "68% Medicaid, 19% Commercial, 12% Medicare",
+      engagement: "Social media preference (1.14x), Active on Facebook (1.02x)",
+      bhRelationship: "24% current, 12% dormant, 64% non-patient",
+      entryPoint: "30% Clinic-Outpatient, 23% Primary Care, 21% Hospital-Inpatient, 14% Maternity",
+      description: "Young women predominantly covered by Medicaid. Less financially stable but highly retained. High obstetrics use — 75% use maternity services. Active on social media and digital channels."
+    },
+    {
+      name: "Pinterest and Planning",
+      size: "566K (12%)",
+      avgAge: 34,
+      commercial: "59%",
+      medianIncome: "$50,000-$74,999",
+      education: "33% college educated",
+      financialStability: "Average Stability",
+      family: "18% married, 48% have children",
+      diversity: "Average",
+      retention: "55% (above avg)",
+      avgValue: "$1,891",
+      householdValue: "$2,392 (26% lift)",
+      topConditions: ["Endocrine Disorders (15%)", "Thyroid Disorders (9%)", "Respiratory Infections (8%)", "Asthma (8%)", "Headache/Migraine (7%)"],
+      topRisks: ["Obstetrics (55%)", "Gynecology (12%)", "Digestive Health (7%)", "Urology (7%)", "ENT (7%)"],
+      payer: "59% Commercial, 31% Medicaid, 9% Medicare",
+      engagement: "Yoga/Pilates (1.52x), Smart Phone User (1.51x), Running/Jogging (1.41x), Fitness/Exercise (1.4x), Natural Foods (1.39x)",
+      bhRelationship: "17% current, 11% dormant, 72% non-patient",
+      entryPoint: "36% Primary Care, 31% Clinic-Outpatient, 10% Maternity, 9% Hospital-Outpatient",
+      description: "Younger women highly valuable to BH. Nearly 60% commercially insured, physically active, respond well to digital marketing. High retention and household value. Manage endocrine, thyroid, and respiratory conditions."
+    },
+    {
+      name: "Settling Down",
+      size: "244K (5%)",
+      avgAge: 35,
+      commercial: "52%",
+      medianIncome: "$50,000-$74,999",
+      education: "31% college educated",
+      financialStability: "Average Stability",
+      family: "47% married, 51% have children",
+      diversity: "Average",
+      retention: "41% (below avg)",
+      avgValue: "$1,045",
+      householdValue: "$1,325 (27% lift)",
+      topConditions: ["Endocrine Disorders (12%)", "Hypertension (12%)", "Substance Related (10%)", "Lipid Metabolism (8%)", "Asthma (6%)"],
+      topRisks: ["Trauma (8%)", "Spine (8%)", "Digestive Health (7%)", "Cardiology (6%)", "ENT (6%)"],
+      payer: "52% Commercial, 41% Medicaid, 4% Medicare",
+      engagement: "Early Tech Adopter (1.39x), Running/Jogging (1.36x), Plays Sports (1.28x), Cycling (1.28x), Smart Phone User (1.26x)",
+      bhRelationship: "22% current, 17% dormant, 62% non-patient",
+      entryPoint: "35% Clinic-Outpatient, 27% Primary Care, 23% Hospital-Inpatient, 8% Urgent Care",
+      description: "Younger married men, 52% commercially insured. Healthcare behavior influenced by household decision-maker (mostly Pinterest and Planning women). More likely to use ED and Urgent Care. Would benefit from Primary Care relationship. Below-average retention."
+    },
+    {
+      name: "Weekend Warriors",
+      size: "493K (10%)",
+      avgAge: 33,
+      commercial: "25%",
+      medianIncome: "$40,000-$49,999",
+      education: "22% college educated",
+      financialStability: "Less Stable",
+      family: "0% married, 25% have children",
+      diversity: "Average",
+      retention: "50% (average)",
+      avgValue: "$1,151",
+      householdValue: "$1,261 (10% lift)",
+      topConditions: ["Substance Related (12%)", "Endocrine Disorders (9%)", "Hypertension (9%)", "Asthma (6%)", "Respiratory Infections (4%)"],
+      topRisks: ["Trauma (6%)", "Spine (4%)", "Digestive Health (4%)", "ENT (3%)", "Neurosciences (3%)"],
+      payer: "70% Medicaid, 25% Commercial, 3% Medicare",
+      engagement: "Cycling (0.96x), Early Tech Adopter (0.94x), Mobile Browser (0.94x), Internet Research (0.94x), Smart Phone User (0.92x)",
+      bhRelationship: "13% current, 9% dormant, 79% non-patient",
+      entryPoint: "34% Clinic-Outpatient, 26% Primary Care, 22% Hospital-Inpatient, 11% Urgent Care",
+      description: "Single men, ~500K individuals, mostly Medicaid. Least likely to be current BH patients. Enter through ED more than other segments. Top chronic condition is substance abuse, top risk is trauma."
+    },
+    {
+      name: "One Day at a Time",
+      size: "415K (9%)",
+      avgAge: 55,
+      commercial: "22%",
+      medianIncome: "$20,000-$29,999",
+      education: "7% college educated",
+      financialStability: "Less Stable",
+      family: "19% married, 18% have children",
+      diversity: "More diverse",
+      retention: "46% (below avg)",
+      avgValue: "$2,337",
+      householdValue: "$2,392 (2% lift)",
+      topConditions: ["Hypertension (35%)", "Lipid Metabolism (19%)", "Endocrine Disorders (18%)", "Diabetes (14%)", "Substance Related (12%)"],
+      topRisks: ["Neurosciences (14%)", "Cardiology (11%)", "Spine (10%)", "Endocrinology (10%)", "Digestive Health (9%)"],
+      payer: "38% Medicaid, 37% Medicare, 22% Commercial",
+      engagement: "Social Media Preference (1.49x), Mobile Browser (0.75x), Vitamins/Supplements (0.71x)",
+      bhRelationship: "17% current, 10% dormant, 73% non-patient",
+      entryPoint: "37% Primary Care, 25% Clinic-Outpatient, 20% Hospital-Inpatient, 9% Urgent Care",
+      description: "Middle-age, ethnically diverse, less affluent. Despite lower commercial share, high avg value ($2,337). Metabolic syndrome (diabetes, hypertension, high cholesterol, obesity) is common. High-need, high-value segment."
+    },
+    {
+      name: "Stable and Seeking Care",
+      size: "1.4M (29%)",
+      avgAge: 54,
+      commercial: "67%",
+      medianIncome: "$50,000-$74,999",
+      education: "38% college educated",
+      financialStability: "Average Stability",
+      family: "26% married, 39% have children",
+      diversity: "Average",
+      retention: "46% (below avg)",
+      avgValue: "$2,734",
+      householdValue: "$3,063 (12% lift)",
+      topConditions: ["Hypertension (33%)", "Lipid Metabolism (25%)", "Endocrine Disorders (20%)", "Thyroid (12%)", "Back Problems (12%)"],
+      topRisks: ["Cardiology (8%)", "Gynecology (8%)", "Vascular (8%)", "Spine (8%)", "Digestive Health (7%)"],
+      payer: "67% Commercial, 25% Medicare, 6% Medicaid",
+      engagement: "Smart Phone User (1.3x), Early Tech Adopter (1.23x), Cycling (1.22x), Running/Jogging (1.21x), Mobile Purchaser (1.19x)",
+      bhRelationship: "14% current, 9% dormant, 77% non-patient",
+      entryPoint: "56% Primary Care, 21% Clinic-Outpatient, 9% Hospital-Outpatient, 8% Hospital-Inpatient",
+      description: "LARGEST segment (1.4M, 29% of market). Highest commercial share (67%) AND highest per-patient value ($2,734). Middle-age, digitally engaged, enter through Primary Care. Top opportunity for cardiology and women's health screenings. High digital engagement propensity."
+    },
+    {
+      name: "Senior Discounts",
+      size: "664K (14%)",
+      avgAge: 77,
+      commercial: "2%",
+      medianIncome: "$20,000-$29,999",
+      education: "15% college educated",
+      financialStability: "Average Stability",
+      family: "21% married, 12% have children",
+      diversity: "Average",
+      retention: "53% (above avg)",
+      avgValue: "$1,144",
+      householdValue: "$1,196 (5% lift)",
+      topConditions: ["Hypertension (70%)", "Lipid Metabolism (46%)", "Diabetes (29%)", "Endocrine Disorders (26%)", "Coronary/Heart Disease (20%)"],
+      topRisks: ["Vascular (20%)", "Neurosciences (20%)", "Cardiology (19%)", "Urology (17%)", "Oncology & Hematology (17%)"],
+      payer: "96% Medicare, 9% Commercial (overlap)",
+      engagement: "Social Media Preference (1.63x), Mobile Browser (1.01x), Active on Facebook (1.0x)",
+      bhRelationship: "12% current, 9% dormant, 79% non-patient",
+      entryPoint: "41% Primary Care, 19% Urgent Care, 16% Hospital-Inpatient, 10% Clinic-Outpatient",
+      description: "Older adults, almost entirely Medicare. Highest chronic illness rate. Hypertension (70%), high cholesterol, diabetes are dominant. High risk for vascular, neurosciences, cardiology. Active on social media despite age. Above-average retention."
+    },
+    {
+      name: "Empty Nests, Full Pockets",
+      size: "683K (14%)",
+      avgAge: 76,
+      commercial: "3%",
+      medianIncome: "$75,000-$99,999",
+      education: "52% college educated",
+      financialStability: "Most Stable",
+      family: "25% married, 20% have children",
+      diversity: "Less diverse",
+      retention: "50% (average)",
+      avgValue: "$938",
+      householdValue: "$1,215 (30% lift)",
+      topConditions: ["Hypertension (61%)", "Lipid Metabolism (50%)", "Endocrine Disorders (26%)", "Osteoarthritis (25%)", "Back Problems (23%)"],
+      topRisks: ["Vascular (19%)", "Oncology & Hematology (17%)", "Cardiology (17%)", "Orthopedics (16%)", "Urology (14%)"],
+      payer: "96% Medicare, 5% Commercial (overlap)",
+      engagement: "Smart Phone User (1.62x), Early Tech Adopter (1.6x), Cycling (1.57x), Running/Jogging (1.54x), Yoga/Pilates (1.48x)",
+      bhRelationship: "14% current, 8% dormant, 78% non-patient",
+      entryPoint: "66% Primary Care, 13% Hospital-Outpatient, 8% Hospital-Inpatient, 5% Clinic-Outpatient",
+      description: "Affluent seniors, most financially stable segment. 52% college educated, $75-100K income. Despite lower avg value, bring in household members (30% HH lift). Active lifestyles — osteoarthritis and back problems more common than heart disease. High digital adoption."
+    }
+  ];
+
+  const BH_SERVICES = {
+    serviceLines: ["Cancer Care", "Heart & Vascular", "Brain & Spine", "Orthopedic Care", "Primary Care", "Same-Day Care"],
+    families: ["Urgent & Access", "Surgical & Procedural", "Diagnostics & Screening", "Specialty Medical", "Relationship & Life Stage"]
+  };
+
+  const BH_COMPETITORS = [
+    "Broward Health", "CHS", "Cleveland Clinic Florida", "HCA Florida (+ MD Now)",
+    "Holy Cross/Trinity", "HSA", "Jackson Health", "Jupiter Medical Center",
+    "Keralty", "Lakeside/HCD PBC", "Larkin", "Memorial Healthcare",
+    "Mount Sinai", "Nicklaus Children's", "Palm Beach Health/Tenet",
+    "UHealth/UM", "UHS", "Baptist Health US (different system)"
+  ];
+
+  const BH_TERRITORY = {
+    counties: [
+      { name: "Miami-Dade", population: "~2.7M", fips: "086" },
+      { name: "Broward", population: "~1.9M", fips: "011" },
+      { name: "Palm Beach", population: "~1.5M", fips: "099" },
+      { name: "Monroe", population: "~83K", fips: "087" }
+    ]
+  };
+
+  const BH_STRATEGY = {
+    payerMixPrinciple: "Target commercially insured ages 18-64. 40%+ commercial insurance rate = viable market. Payer mix is the #1 strategic KPI.",
+    segmentPriority: "Stable and Seeking Care is the #1 priority segment: largest (29%), highest commercial (67%), highest per-patient value ($2,734), enters through Primary Care.",
+    medicareAdvantage: "Census counts MA under Medicare (public), not private. South Florida MA penetration is 60-80%. Commercial numbers from Census exclude MA enrollees.",
+    source: "Segment data from Healthgrades Segment Profiles, prepared for Baptist Health South Florida, Jan 2020 by Emmett Gordon, Senior Analyst."
+  };
+
+  // ── 6. Local Knowledge Base Matching ─────────────────────────────────────
+  function formatSegmentProfile(seg) {
+    return `## ${seg.name}\n\n` +
+      `> ${seg.description}\n\n` +
+      `| Metric | Value |\n|---|---|\n` +
+      `| **Size** | ${seg.size} |\n` +
+      `| **Avg Age** | ${seg.avgAge} |\n` +
+      `| **Commercial %** | ${seg.commercial} |\n` +
+      `| **Median Income** | ${seg.medianIncome} |\n` +
+      `| **Education** | ${seg.education} |\n` +
+      `| **Financial Stability** | ${seg.financialStability} |\n` +
+      `| **Family** | ${seg.family} |\n` +
+      `| **Retention** | ${seg.retention} |\n` +
+      `| **Avg Value** | ${seg.avgValue} |\n` +
+      `| **Household Value** | ${seg.householdValue} |\n` +
+      `| **Payer Mix** | ${seg.payer} |\n` +
+      `| **BH Relationship** | ${seg.bhRelationship} |\n` +
+      `| **Entry Point** | ${seg.entryPoint} |\n\n` +
+      `### Top Conditions\n` + seg.topConditions.map(c => `- ${c}`).join('\n') + `\n\n` +
+      `### Top Service Line Risks\n` + seg.topRisks.map(r => `- ${r}`).join('\n') + `\n\n` +
+      `### Engagement Indicators\n${seg.engagement}\n`;
+  }
+
+  function matchLocalKnowledge(query) {
+    const q = query.toLowerCase().trim();
+
+    // Skip if query needs live/dynamic data
+    if (/\d{5}|current|latest|census|address|drive\s*time|isochrone|how many locations|find.*near/i.test(query)) return null;
+
+    // All segments overview
+    if (/what (are |is )?(the )?(bh |baptist )?segments|tell me about (the |all )?segments|what cohorts|list.*segments|segment profiles|healthgrades segments/i.test(q)) {
+      let md = `# BH Consumer Segments (Healthgrades, Jan 2020)\n\n`;
+      md += `Baptist Health's market is divided into **8 consumer segments** totaling ~4.8M individuals across South Florida.\n\n`;
+      md += `| Segment | Size | Avg Age | Commercial % | Avg Value | Retention |\n`;
+      md += `|---|---|---|---|---|---|\n`;
+      for (const s of BH_SEGMENTS) {
+        md += `| **${s.name}** | ${s.size} | ${s.avgAge} | ${s.commercial} | ${s.avgValue} | ${s.retention} |\n`;
+      }
+      md += `\n### Priority Segment\n${BH_STRATEGY.segmentPriority}\n\n`;
+      md += `*Source: ${BH_STRATEGY.source}*`;
+      return md;
+    }
+
+    // Specific segment lookup
+    for (const seg of BH_SEGMENTS) {
+      const segNameLower = seg.name.toLowerCase();
+      const segWords = segNameLower.split(/\s+/);
+      // Match on full name or distinctive multi-word fragments
+      if (q.includes(segNameLower) ||
+          (segWords.length >= 2 && segWords.every(w => q.includes(w))) ||
+          (seg.name === "Babies and Bills" && /babies.*bills|babies\s+and\s+bills/i.test(q)) ||
+          (seg.name === "Pinterest and Planning" && /pinterest.*planning/i.test(q)) ||
+          (seg.name === "Settling Down" && /settling\s*down/i.test(q)) ||
+          (seg.name === "Weekend Warriors" && /weekend\s*warriors/i.test(q)) ||
+          (seg.name === "One Day at a Time" && /one\s*day\s*at\s*a\s*time/i.test(q)) ||
+          (seg.name === "Stable and Seeking Care" && /stable.*seeking/i.test(q)) ||
+          (seg.name === "Senior Discounts" && /senior\s*discounts/i.test(q)) ||
+          (seg.name === "Empty Nests, Full Pockets" && /empty\s*nests|full\s*pockets/i.test(q))) {
+        return formatSegmentProfile(seg) + `\n*Source: ${BH_STRATEGY.source}*`;
+      }
+    }
+
+    // Most valuable / highest commercial segment
+    if (/most valuable|highest (commercial|value|per.?patient)|best segment|top segment|priority segment|#1 segment/i.test(q)) {
+      const seg = BH_SEGMENTS.find(s => s.name === "Stable and Seeking Care");
+      return `### Priority Segment\n\n${BH_STRATEGY.segmentPriority}\n\n---\n\n` + formatSegmentProfile(seg) + `\n*Source: ${BH_STRATEGY.source}*`;
+    }
+
+    // Competitors
+    if (/competitor|competition|who (else|do we compete|are the rival)|rival|competing (systems|hospitals|health)/i.test(q)) {
+      let md = `# BH Competitive Landscape\n\nBaptist Health tracks **${BH_COMPETITORS.length} health systems** across South Florida:\n\n`;
+      md += BH_COMPETITORS.map((c, i) => `${i + 1}. ${c}`).join('\n');
+      md += `\n\n*For competitive intel on a specific system or area, ask with a ZIP code or city name to trigger the full research agent.*`;
+      return md;
+    }
+
+    // Service lines
+    if (/service lines?|what services|bh services|service taxonomy|service families/i.test(q)) {
+      let md = `# BH Service Taxonomy\n\n### Service Lines\n`;
+      md += BH_SERVICES.serviceLines.map(s => `- ${s}`).join('\n');
+      md += `\n\n### Service Families\n`;
+      md += BH_SERVICES.families.map(f => `- ${f}`).join('\n');
+      return md;
+    }
+
+    // Territory / counties / markets
+    if (/what (markets?|counties|territory)|which counties|bh (market|territory|coverage|footprint)|where does bh operate|our market/i.test(q)) {
+      let md = `# BH Market Territory\n\nBaptist Health South Florida operates across **4 counties** in South Florida:\n\n`;
+      md += `| County | Population | FIPS Code |\n|---|---|---|\n`;
+      for (const c of BH_TERRITORY.counties) {
+        md += `| **${c.name}** | ${c.population} | 12-${c.fips} |\n`;
+      }
+      md += `\n*Combined market population: ~6.2M*`;
+      return md;
+    }
+
+    // Payer mix strategy / Dan's rule
+    if (/payer mix (strategy|principle|rule)|dan'?s rule|commercial insurance (strategy|target|rule)|40%? commercial|payer mix kpi/i.test(q)) {
+      return `# Payer Mix Strategy\n\n> ${BH_STRATEGY.payerMixPrinciple}\n\n### Key Implications\n- **40%+ commercial** = viable market for BH investment\n- Always include payer mix as a KPI in market assessments\n- Target commercially insured ages 18-64\n- South Florida Medicare Advantage note: ${BH_STRATEGY.medicareAdvantage}`;
+    }
+
+    // Source / data source
+    if (/source.*(segment|data|profile)|where.*(segment|data) (come|from)|who (created|made|prepared).*(segment|profile)|healthgrades/i.test(q)) {
+      return `### Segment Data Source\n\n${BH_STRATEGY.source}`;
+    }
+
+    // Medicare Advantage
+    if (/medicare advantage|MA penetration|census.*medicare/i.test(q)) {
+      return `### Medicare Advantage in South Florida\n\n${BH_STRATEGY.medicareAdvantage}`;
+    }
+
+    return null;
+  }
+
   // ── Send (with cache + dedup) ─────────────────────────────────────────────
   async function send() {
     const query = queryInput.value.trim();
@@ -340,6 +655,16 @@
     if (cached) {
       console.log('[MRA] Cache hit for:', normalizedQuery);
       addAgentMsg(cached);
+      return;
+    }
+
+    // Step 1.5: Check local knowledge base
+    const localAnswer = matchLocalKnowledge(query);
+    if (localAnswer) {
+      console.log('[MRA] Knowledge base hit for:', normalizedQuery);
+      const annotated = localAnswer + '\n\n---\n*(answered from BH knowledge base)*';
+      addAgentMsg(annotated);
+      ResponseCache.set(query, annotated);
       return;
     }
 
