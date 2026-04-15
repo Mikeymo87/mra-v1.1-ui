@@ -1,0 +1,12 @@
+{
+  "name": "mra-v1.1-ui",
+  "version": "1.0.0",
+  "description": "Baptist Health Market Research Agent v1.1 Chat UI",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}

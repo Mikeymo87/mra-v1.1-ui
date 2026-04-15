@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BH Market Research Agent</title>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --green: #2EA84A;
+      --green-dark: #237a37;
+      --black: #25282A;
+      --mint: #f0faf3;
+      --border: #e2e8e4;
+      --text: #1a1a1a;
+      --muted: #6b7280;
+      --bubble-agent: #ffffff;
+      --bubble-user: #2EA84A;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--mint);
+      color: var(--text);
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Header ── */
+    header {
+      background: var(--black);
+      color: white;
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-shrink: 0;
+      border-bottom: 3px solid var(--green);
+    }
+
+    .bh-badge {
+      background: var(--green);
+      color: white;
+      font-weight: 800;
+      font-size: 13px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      letter-spacing: 0.5px;
+    }
+
+    .header-title { font-size: 16px; font-weight: 600; }
+    .header-sub { font-size: 12px; color: #9ca3af; margin-left: 2px; }
+
+    .header-status {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 13px;
+      color: #9ca3af;
+    }
+
+    .status-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--green); transition: background 0.3s;
+    }
+    .status-dot.busy { background: #f59e0b; }
+    .status-dot.error { background: #ef4444; }
+
+    /* ── Messages ── */
+    #messages {
+      flex: 1; overflow-y: auto; padding: 24px 20px;
+      display: flex; flex-direction: column; gap: 20px;
+    }
+
+    .msg { display: flex; flex-direction: column; gap: 4px; max-width: 960px; width: 100%; }
+    .msg.user { align-self: flex-end; align-items: flex-end; max-width: 600px; }
+    .msg.agent { align-self: flex-start; align-items: flex-start; }
+
+    .msg-label {
+      font-size: 11px; font-weight: 600; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.5px; padding: 0 4px;
+    }
+
+    .msg-bubble {
+      padding: 20px 24px; border-radius: 12px; font-size: 14px;
+      line-height: 1.7; max-width: 100%; position: relative;
+    }
+
+    .msg.user .msg-bubble {
+      background: var(--bubble-user); color: white; border-bottom-right-radius: 3px;
+    }
+
+    .msg.agent .msg-bubble {
+      background: var(--bubble-agent); color: var(--text);
+      border: 1px solid var(--border); border-bottom-left-radius: 3px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    }
+
+    /* Markdown */
+    .msg-bubble h1, .msg-bubble h2, .msg-bubble h3 { margin: 18px 0 8px; color: var(--black); }
+    .msg-bubble h1 { font-size: 18px; border-bottom: 2px solid var(--green); padding-bottom: 6px; }
+    .msg-bubble h2 { font-size: 16px; }
+    .msg-bubble h3 { font-size: 14px; text-transform: uppercase; color: var(--green); letter-spacing: 0.3px; }
+    .msg-bubble p { margin: 8px 0; }
+    .msg-bubble ul, .msg-bubble ol { padding-left: 20px; margin: 8px 0; }
+    .msg-bubble li { margin: 4px 0; }
+    .msg-bubble strong { color: var(--black); }
+    .msg-bubble em { color: var(--muted); }
+    .msg-bubble table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 13px; }
+    .msg-bubble th {
+      background: var(--black); color: #7DE69B; border: 1px solid #333;
+      padding: 8px 12px; text-align: left; font-weight: 600;
+      font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px;
+    }
+    .msg-bubble td { border: 1px solid var(--border); padding: 8px 12px; }
+    .msg-bubble tr:nth-child(even) td { background: #f9fafb; }
+    .msg-bubble tr:hover td { background: #edf7ef; }
+    .msg-bubble code { background: #f3f4f6; padding: 1px 5px; border-radius: 3px; font-size: 12px; }
+    .msg-bubble blockquote { border-left: 3px solid var(--green); padding-left: 12px; color: var(--muted); margin: 10px 0; }
+    .msg-bubble a { color: var(--green); }
+    .msg-bubble hr { border: none; border-top: 1px solid var(--border); margin: 18px 0; }
+
+    /* Action bar under agent messages */
+    .msg-actions {
+      display: flex; gap: 6px; padding: 4px 0 0;
+    }
+    .action-btn {
+      background: white; border: 1px solid var(--border); border-radius: 6px;
+      padding: 5px 12px; font-size: 11px; color: var(--muted); cursor: pointer;
+      transition: all 0.2s; display: flex; align-items: center; gap: 4px;
+    }
+    .action-btn:hover { border-color: var(--green); color: var(--green); }
+    .action-btn.copied { background: var(--green); color: white; border-color: var(--green); }
+
+    /* Thinking */
+    .thinking {
+      display: flex; align-items: center; gap: 8px; padding: 12px 16px;
+      background: white; border: 1px solid var(--border); border-radius: 12px;
+      border-bottom-left-radius: 3px; color: var(--muted); font-size: 13px;
+    }
+    .dots { display: flex; gap: 4px; }
+    .dot { width: 6px; height: 6px; background: var(--green); border-radius: 50%; animation: bounce 1.2s infinite; }
+    .dot:nth-child(2) { animation-delay: 0.2s; }
+    .dot:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes bounce {
+      0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
+      40% { transform: translateY(-5px); opacity: 1; }
+    }
+
+    .error-bubble {
+      padding: 12px 16px; border-radius: 12px; background: #fef2f2;
+      border: 1px solid #fecaca; color: #b91c1c; font-size: 13px;
+    }
+
+    /* ── Input bar ── */
+    .input-area { flex-shrink: 0; background: white; border-top: 1px solid var(--border); padding: 16px 20px; }
+    .input-bar { display: flex; gap: 10px; align-items: flex-end; max-width: 960px; margin: 0 auto; }
+
+    textarea {
+      flex: 1; resize: none; border: 1.5px solid var(--border); border-radius: 10px;
+      padding: 10px 14px; font-size: 14px; font-family: inherit; line-height: 1.5;
+      min-height: 44px; max-height: 140px; outline: none; transition: border-color 0.2s; background: #fafafa;
+    }
+    textarea:focus { border-color: var(--green); background: white; }
+
+    #sendBtn {
+      background: var(--green); color: white; border: none; border-radius: 10px;
+      width: 44px; height: 44px; cursor: pointer; font-size: 18px;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+      transition: background 0.2s, opacity 0.2s;
+    }
+    #sendBtn:hover { background: var(--green-dark); }
+    #sendBtn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    .input-hint { text-align: center; font-size: 11px; color: var(--muted); margin-top: 8px; }
+
+    /* Welcome */
+    .welcome {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      flex: 1; gap: 12px; color: var(--muted); text-align: center; padding: 40px 20px;
+    }
+    .welcome h2 { font-size: 20px; color: var(--black); font-weight: 600; }
+    .welcome p { font-size: 14px; max-width: 480px; line-height: 1.6; }
+  </style>
+</head>
+<body>
+
+<header>
+  <span class="bh-badge">BH</span>
+  <span class="header-title">Market Research Agent</span>
+  <span class="header-sub">Strategy &amp; Insight · v1.1</span>
+  <div class="header-status">
+    <div class="status-dot" id="statusDot"></div>
+    <span id="statusText">Ready</span>
+  </div>
+</header>
+
+<div id="messages">
+  <div class="welcome" id="welcome">
+    <h2>Baptist Health Market Research Agent</h2>
+    <p>Ask about BH locations, competitor intel, demographics, payer mix, drive times, and market positioning across South Florida. Follow-up questions work within this session.</p>
+  </div>
+</div>
+
+<div class="input-area">
+  <div class="input-bar">
+    <textarea id="queryInput" placeholder="Ask a research question..." rows="1"></textarea>
+    <button id="sendBtn" title="Send">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="22" y1="2" x2="11" y2="13"></line>
+        <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+      </svg>
+    </button>
+  </div>
+  <div class="input-hint">Enter to send · Shift+Enter for new line</div>
+</div>
+
+<script>
+  const N8N_WEBHOOK = 'https://michaelmora.app.n8n.cloud/webhook/market-research';
+  const SESSION_ID  = 'mra-' + Date.now() + '-' + Math.random().toString(36).slice(2,8);
+
+  const messagesEl = document.getElementById('messages');
+  const queryInput = document.getElementById('queryInput');
+  const sendBtn    = document.getElementById('sendBtn');
+  const statusDot  = document.getElementById('statusDot');
+  const statusText = document.getElementById('statusText');
+  const welcomeEl  = document.getElementById('welcome');
+
+  // ── 1. Response Cache (sessionStorage, max 50 entries) ────────────────────
+  const ResponseCache = {
+    KEY: 'mra_cache',
+    MAX: 50,
+
+    _normalize(query) {
+      return query.toLowerCase().trim().replace(/\s+/g, ' ');
+    },
+
+    _readStore() {
+      try { return JSON.parse(sessionStorage.getItem(this.KEY)) || {}; }
+      catch { return {}; }
+    },
+
+    _writeStore(store) {
+      sessionStorage.setItem(this.KEY, JSON.stringify(store));
+    },
+
+    get(query) {
+      const key = this._normalize(query);
+      const store = this._readStore();
+      return store[key]?.response || null;
+    },
+
+    set(query, response) {
+      const key = this._normalize(query);
+      const store = this._readStore();
+      const keys = Object.keys(store);
+      // Evict oldest entries if at capacity
+      while (keys.length >= this.MAX) {
+        let oldest = keys[0], oldestTime = store[keys[0]].ts;
+        for (const k of keys) {
+          if (store[k].ts < oldestTime) { oldest = k; oldestTime = store[k].ts; }
+        }
+        delete store[oldest];
+        keys.splice(keys.indexOf(oldest), 1);
+      }
+      store[key] = { response, ts: Date.now() };
+      this._writeStore(store);
+    }
+  };
+
+  // ── 2. Request Deduplication ──────────────────────────────────────────────
+  const inflightRequests = new Map(); // normalized query -> Promise
+
+  // ── 3. Debounce for Enter key ─────────────────────────────────────────────
+  let _enterDebounceTimer = null;
+
+  // ── 4. Yext Location Pre-load ─────────────────────────────────────────────
+  let bhLocations = [];
+  (async function preloadYextLocations() {
+    try {
+      const url = 'https://liveapi.yext.com/v2/accounts/me/entities?api_key=b1e059a53d930db053c37cedd5cd85c8&v=20231201&entityTypes=healthcareFacility&limit=50&fields=name,address,geocodedCoordinate,closed';
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`Yext fetch failed: ${res.status}`);
+      const data = await res.json();
+      bhLocations = data.response?.entities || [];
+      console.log(`[MRA] Yext locations pre-loaded: ${bhLocations.length} facilities`);
+    } catch (err) {
+      console.warn('[MRA] Yext pre-load failed:', err.message);
+    }
+  })();
+
+  queryInput.addEventListener('input', function () {
+    this.style.height = 'auto';
+    this.style.height = Math.min(this.scrollHeight, 140) + 'px';
+  });
+
+  // Enter key: 300ms debounce
+  queryInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      clearTimeout(_enterDebounceTimer);
+      _enterDebounceTimer = setTimeout(() => send(), 300);
+    }
+  });
+
+  // Button click: immediate (intentional action)
+  sendBtn.addEventListener('click', send);
+
+  // ── Send (with cache + dedup) ─────────────────────────────────────────────
+  async function send() {
+    const query = queryInput.value.trim();
+    if (!query || sendBtn.disabled) return;
+
+    welcomeEl?.remove();
+    addUserMsg(query);
+    queryInput.value = '';
+    queryInput.style.height = 'auto';
+
+    const normalizedQuery = ResponseCache._normalize(query);
+
+    // Step 1: Check cache
+    const cached = ResponseCache.get(query);
+    if (cached) {
+      console.log('[MRA] Cache hit for:', normalizedQuery);
+      addAgentMsg(cached);
+      return;
+    }
+
+    const thinkingId = addThinking();
+    setStatus('busy', 'Researching...');
+    sendBtn.disabled = true;
+
+    try {
+      let responseText;
+
+      // Step 2: Check dedup — reuse in-flight promise if same query
+      if (inflightRequests.has(normalizedQuery)) {
+        console.log('[MRA] Dedup: reusing in-flight request for:', normalizedQuery);
+        responseText = await inflightRequests.get(normalizedQuery);
+      } else {
+        // Step 3: Normal fetch
+        const fetchPromise = (async () => {
+          const res = await fetch(N8N_WEBHOOK, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query, session_id: SESSION_ID })
+          });
+          if (!res.ok) throw new Error(`Request failed: ${res.status}`);
+          const data = await res.json();
+          return data.response || 'No response returned.';
+        })();
+
+        inflightRequests.set(normalizedQuery, fetchPromise);
+
+        try {
+          responseText = await fetchPromise;
+        } finally {
+          inflightRequests.delete(normalizedQuery);
+        }
+      }
+
+      removeEl(thinkingId);
+      addAgentMsg(responseText);
+
+      // Step 4: Cache the response
+      ResponseCache.set(query, responseText);
+
+      setStatus('ready', 'Ready');
+    } catch (err) {
+      removeEl(thinkingId);
+      addErrorMsg(err.message.includes('500')
+        ? 'The agent hit an error. Try rephrasing or ask a simpler question.'
+        : 'Something went wrong. Please try again.');
+      setStatus('error', 'Error');
+    } finally {
+      sendBtn.disabled = false;
+      queryInput.focus();
+    }
+  }
+
+  // ── Messages ──────────────────────────────────────────────────────────────
+  function addUserMsg(text) {
+    const wrap = mkWrap('user');
+    const label = mkLabel('You');
+    const bubble = document.createElement('div');
+    bubble.className = 'msg-bubble';
+    bubble.textContent = text;
+    wrap.append(label, bubble);
+    appendMsg(wrap);
+  }
+
+  function addAgentMsg(markdown) {
+    const wrap = mkWrap('agent');
+    const label = mkLabel('BH Market Research Agent');
+    const bubble = document.createElement('div');
+    bubble.className = 'msg-bubble';
+    bubble.innerHTML = marked.parse(markdown);
+    bubble.querySelectorAll('a').forEach(a => a.setAttribute('target', '_blank'));
+    wrap.append(label, bubble);
+
+    // Action buttons below the bubble
+    const actions = document.createElement('div');
+    actions.className = 'msg-actions';
+
+    // Copy markdown
+    const copyBtn = document.createElement('button');
+    copyBtn.className = 'action-btn';
+    copyBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy';
+    copyBtn.addEventListener('click', () => {
+      navigator.clipboard.writeText(markdown).then(() => {
+        copyBtn.innerHTML = 'Copied';
+        copyBtn.classList.add('copied');
+        setTimeout(() => {
+          copyBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy';
+          copyBtn.classList.remove('copied');
+        }, 2000);
+      });
+    });
+
+    // Download as PDF (print)
+    const pdfBtn = document.createElement('button');
+    pdfBtn.className = 'action-btn';
+    pdfBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> PDF';
+    pdfBtn.addEventListener('click', () => downloadPDF(markdown));
+
+    // Download as Word (.doc via HTML)
+    const wordBtn = document.createElement('button');
+    wordBtn.className = 'action-btn';
+    wordBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> Word';
+    wordBtn.addEventListener('click', () => downloadWord(markdown));
+
+    actions.append(copyBtn, pdfBtn, wordBtn);
+    wrap.appendChild(actions);
+    appendMsg(wrap);
+  }
+
+  function addErrorMsg(msg) {
+    const wrap = mkWrap('agent');
+    const label = mkLabel('Error');
+    const bubble = document.createElement('div');
+    bubble.className = 'error-bubble';
+    bubble.textContent = msg;
+    wrap.append(label, bubble);
+    appendMsg(wrap);
+  }
+
+  function addThinking() {
+    const id = 'thinking-' + Date.now();
+    const wrap = mkWrap('agent');
+    wrap.id = id;
+    const label = mkLabel('BH Market Research Agent');
+    const t = document.createElement('div');
+    t.className = 'thinking';
+    t.innerHTML = '<div class="dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div><span>Researching — this may take 20-60 seconds...</span>';
+    wrap.append(label, t);
+    appendMsg(wrap);
+    return id;
+  }
+
+  function mkWrap(role) { const d = document.createElement('div'); d.className = `msg ${role}`; return d; }
+  function mkLabel(text) { const d = document.createElement('div'); d.className = 'msg-label'; d.textContent = text; return d; }
+  function appendMsg(el) { messagesEl.appendChild(el); messagesEl.scrollTop = messagesEl.scrollHeight; }
+  function removeEl(id) { document.getElementById(id)?.remove(); }
+
+  function setStatus(state, text) {
+    statusDot.className = 'status-dot' + (state !== 'ready' ? ` ${state}` : '');
+    statusText.textContent = text;
+  }
+
+  // ── Download helpers ──────────────────────────────────────────────────────
+  function styledHTML(markdown) {
+    const rendered = marked.parse(markdown);
+    return `<!DOCTYPE html><html><head><meta charset="UTF-8">
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 800px; margin: 40px auto; padding: 0 24px; color: #1a1a1a; line-height: 1.7; font-size: 14px; }
+  h1 { font-size: 20px; border-bottom: 3px solid #2EA84A; padding-bottom: 6px; margin: 24px 0 12px; }
+  h2 { font-size: 17px; margin: 20px 0 10px; }
+  h3 { font-size: 14px; text-transform: uppercase; color: #2EA84A; letter-spacing: 0.3px; margin: 16px 0 8px; }
+  p { margin: 8px 0; }
+  ul, ol { padding-left: 20px; margin: 8px 0; }
+  li { margin: 4px 0; }
+  strong { color: #25282A; }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 13px; }
+  th { background: #25282A; color: #7DE69B; padding: 8px 12px; text-align: left; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; }
+  td { border: 1px solid #e2e8e4; padding: 8px 12px; }
+  tr:nth-child(even) td { background: #f9fafb; }
+  blockquote { border-left: 3px solid #2EA84A; padding-left: 12px; color: #6b7280; margin: 10px 0; }
+  hr { border: none; border-top: 1px solid #e2e8e4; margin: 18px 0; }
+  .footer { margin-top: 40px; padding-top: 12px; border-top: 1px solid #e2e8e4; font-size: 11px; color: #9ca3af; }
+</style></head><body>
+<div style="margin-bottom:24px;">
+  <span style="background:#2EA84A;color:white;font-weight:800;font-size:12px;padding:2px 7px;border-radius:3px;">BH</span>
+  <span style="font-size:14px;font-weight:600;margin-left:8px;">Market Research Agent</span>
+  <span style="font-size:12px;color:#9ca3af;margin-left:4px;">Strategy & Insight</span>
+</div>
+${rendered}
+<div class="footer">Generated by Baptist Health Market Research Agent · ${new Date().toLocaleDateString()}</div>
+</body></html>`;
+  }
+
+  function downloadPDF(markdown) {
+    const html = styledHTML(markdown).replace(
+      '</body>',
+      '<script>window.onload=function(){setTimeout(function(){window.print();},400);}<\/script></body>'
+    );
+    const w = window.open('', '_blank');
+    if (!w) return;
+    w.document.write(html);
+    w.document.close();
+  }
+
+  function downloadWord(markdown) {
+    const html = styledHTML(markdown);
+    const blob = new Blob(['\ufeff' + html], { type: 'application/msword' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `BH-Market-Research-${new Date().toISOString().slice(0,10)}.doc`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+</script>
+</body>
+</html>
