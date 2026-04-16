@@ -367,88 +367,65 @@
   function matchLocalKnowledge(query) {
     const q = query.toLowerCase().trim();
 
-    // Skip if query needs live/dynamic data
-    if (/\d{5}|current|latest|census|address|drive\s*time|isochrone|how many locations|find.*near/i.test(query)) return null;
+    // ── GATE: If the query wants ANYTHING research-related, skip local entirely ──
+    // Any geography, data request, action verb, ZIP, address, comparison = agent
+    const needsAgent =
+      /\d{5}/.test(q) ||                                                          // ZIP code
+      /near|around|within|in\s+(brickell|doral|coral|kendall|miami|broward|palm|hollywood|plantation|pembroke|miramar|boca|boynton|delray|west palm|wellington|homestead|hialeah|sunrise|weston|davie|fort laud|downtown)/i.test(q) ||
+      /find|show|compare|analyze|run|pull|look\s*up|get\s+me|search|map|give\s+me|how\s+many|what\s+is\s+the\s+(payer|demo|population|income|rating)/i.test(q) ||
+      /census|current|latest|drive\s*time|isochrone|address|ratings?|reviews?/i.test(q) ||
+      /competitor.*\b(near|in|around|brickell|doral|coral|miami|broward)\b/i.test(q) ||
+      /segment.*(analysis|scoring|score|for|in\s+)/i.test(q) ||                   // segment analysis FOR an area
+      /payer\s*mix\s*(in|for|of)\b/i.test(q) ||                                   // payer mix FOR somewhere
+      /vs\.?|versus|compared?\s+to/i.test(q);                                     // comparisons
 
-    // All segments overview
-    if (/what (are |is )?(the )?(bh |baptist )?segments|tell me about (the |all )?segments|what cohorts|list.*segments|segment profiles|healthgrades segments/i.test(q)) {
-      let md = `# BH Consumer Segments\n\n`;
-      md += `Baptist Health's market is divided into **8 consumer segments** used as targeting frameworks across South Florida.\n\n`;
-      for (let i = 0; i < BH_SEGMENTS.length; i++) {
-        md += `${i + 1}. **${BH_SEGMENTS[i].name}** — ${BH_SEGMENTS[i].description}\n`;
-      }
-      md += `\n### Priority Segment\n${BH_STRATEGY.segmentPriority}\n\n`;
-      md += ``;
+    if (needsAgent) return null;
+
+    // ── SAFE: Only pure definitional / "what is" questions answered locally ──
+
+    // List all segments
+    if (/what (are |is )?(the )?(bh |baptist )?(segments|cohorts)|list.*segments|tell me about (the |all )?(segments|cohorts)/i.test(q)) {
+      let md = `# BH Consumer Segments\n\nBaptist Health uses **${BH_SEGMENTS.length} consumer segments** for market targeting:\n\n`;
+      BH_SEGMENTS.forEach((s, i) => { md += `${i + 1}. **${s.name}** — ${s.description}\n`; });
       return md;
     }
 
-    // Specific segment lookup
-    for (const seg of BH_SEGMENTS) {
-      const segNameLower = seg.name.toLowerCase();
-      const segWords = segNameLower.split(/\s+/);
-      // Match on full name or distinctive multi-word fragments
-      if (q.includes(segNameLower) ||
-          (segWords.length >= 2 && segWords.every(w => q.includes(w))) ||
-          (seg.name === "Babies and Bills" && /babies.*bills|babies\s+and\s+bills/i.test(q)) ||
-          (seg.name === "Pinterest and Planning" && /pinterest.*planning/i.test(q)) ||
-          (seg.name === "Settling Down" && /settling\s*down/i.test(q)) ||
-          (seg.name === "Weekend Warriors" && /weekend\s*warriors/i.test(q)) ||
-          (seg.name === "One Day at a Time" && /one\s*day\s*at\s*a\s*time/i.test(q)) ||
-          (seg.name === "Stable and Seeking Care" && /stable.*seeking/i.test(q)) ||
-          (seg.name === "Senior Discounts" && /senior\s*discounts/i.test(q)) ||
-          (seg.name === "Empty Nests, Full Pockets" && /empty\s*nests|full\s*pockets/i.test(q))) {
-        return formatSegmentProfile(seg) + ``;
+    // Specific segment by name (only if asking "what is X" / "tell me about X", not "analyze X in ZIP")
+    if (/tell me about|what is|describe|explain|define/i.test(q)) {
+      for (const seg of BH_SEGMENTS) {
+        if (q.includes(seg.name.toLowerCase())) {
+          return formatSegmentProfile(seg);
+        }
       }
     }
 
-    // Most valuable / highest commercial segment
-    if (/most valuable|highest (commercial|value|per.?patient)|best segment|top segment|priority segment|#1 segment/i.test(q)) {
-      const seg = BH_SEGMENTS.find(s => s.name === "Stable and Seeking Care");
-      return `### Priority Segment\n\n${BH_STRATEGY.segmentPriority}\n\n---\n\n` + formatSegmentProfile(seg) + `\n*${BH_STRATEGY.source}*`;
-    }
-
-    // Competitors — only answer locally if NO geography is mentioned (generic "who do we track?")
-    const isCompetitorQ = /competitor|competition|who (else|do we compete|are the rival)|rival|competing (systems|hospitals|health)/i.test(q);
-    const hasGeoInQ = /\d{5}|near|in |around|brickell|doral|coral|kendall|miami|broward|palm|hollywood|plantation|pembroke|miramar|boca|boynton|delray|west palm|wellington|homestead|hialeah|sunrise|weston|davie|fort laud/i.test(q);
-    if (isCompetitorQ && !hasGeoInQ) {
-      let md = `# BH Competitive Landscape\n\nBaptist Health tracks **${BH_COMPETITORS.length} health systems** across South Florida:\n\n`;
+    // "Who are our competitors?" (no geography)
+    if (/who (are |do we )?(our |the )?(competitor|rival)|what (competitor|rival|system)s? do we track/i.test(q)) {
+      let md = `# BH Competitive Landscape\n\nBaptist Health tracks **${BH_COMPETITORS.length} health systems**:\n\n`;
       md += BH_COMPETITORS.map((c, i) => `${i + 1}. ${c}`).join('\n');
       return md;
     }
 
-    // Service lines
-    if (/service lines?|what services|bh services|service taxonomy|service families/i.test(q)) {
-      let md = `# BH Service Taxonomy\n\n### Service Lines\n`;
+    // "What service lines does BH have?"
+    if (/what (are )?(bh |baptist )?(service lines?|services)|service taxonomy/i.test(q)) {
+      let md = `# BH Service Lines\n\n`;
       md += BH_SERVICES.serviceLines.map(s => `- ${s}`).join('\n');
       md += `\n\n### Service Families\n`;
       md += BH_SERVICES.families.map(f => `- ${f}`).join('\n');
       return md;
     }
 
-    // Territory / counties / markets
-    if (/what (markets?|counties|territory)|which counties|bh (market|territory|coverage|footprint)|where does bh operate|our market/i.test(q)) {
-      let md = `# BH Market Territory\n\nBaptist Health South Florida operates across **4 counties** in South Florida:\n\n`;
-      md += `| County | Population | FIPS Code |\n|---|---|---|\n`;
-      for (const c of BH_TERRITORY.counties) {
-        md += `| **${c.name}** | ${c.population} | 12-${c.fips} |\n`;
-      }
-      md += `\n*Combined market population: ~6.2M*`;
+    // "What counties / markets does BH cover?"
+    if (/what (markets?|counties|territory)|where does bh operate|bh (footprint|coverage)/i.test(q)) {
+      let md = `# BH Market Territory\n\n`;
+      md += `| County | Population |\n|---|---|\n`;
+      BH_TERRITORY.counties.forEach(c => { md += `| **${c.name}** | ${c.population} |\n`; });
       return md;
     }
 
-    // Payer mix strategy / Dan's rule
-    if (/payer mix (strategy|principle|rule)|dan'?s rule|commercial insurance (strategy|target|rule)|40%? commercial|payer mix kpi/i.test(q)) {
-      return `# Payer Mix Strategy\n\n> ${BH_STRATEGY.payerMixPrinciple}\n\n### Key Implications\n- **40%+ commercial** = viable market for BH investment\n- Always include payer mix as a KPI in market assessments\n- Target commercially insured ages 18-64\n- South Florida Medicare Advantage note: ${BH_STRATEGY.medicareAdvantage}`;
-    }
-
-    // Source / data source
-    if (/source.*(segment|data|profile)|where.*(segment|data) (come|from)|who (created|made|prepared).*(segment|profile)|healthgrades/i.test(q)) {
-      return `### Segment Framework\n\nThese are Baptist Health's consumer segments used for market targeting and trade area analysis.`;
-    }
-
-    // Medicare Advantage
-    if (/medicare advantage|MA penetration|census.*medicare/i.test(q)) {
-      return `### Medicare Advantage in South Florida\n\n${BH_STRATEGY.medicareAdvantage}`;
+    // "What's our payer mix strategy?" / "Dan's rule" (the principle, not data for an area)
+    if (/payer mix (strategy|principle|rule)|dan'?s rule|40%?\+? commercial/i.test(q)) {
+      return `# Payer Mix Strategy\n\n> ${BH_STRATEGY.payerMixPrinciple}`;
     }
 
     return null;
