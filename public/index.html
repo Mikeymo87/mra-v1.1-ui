@@ -407,11 +407,12 @@
       return `### Priority Segment\n\n${BH_STRATEGY.segmentPriority}\n\n---\n\n` + formatSegmentProfile(seg) + `\n*${BH_STRATEGY.source}*`;
     }
 
-    // Competitors
-    if (/competitor|competition|who (else|do we compete|are the rival)|rival|competing (systems|hospitals|health)/i.test(q)) {
+    // Competitors — only answer locally if NO geography is mentioned (generic "who do we track?")
+    const isCompetitorQ = /competitor|competition|who (else|do we compete|are the rival)|rival|competing (systems|hospitals|health)/i.test(q);
+    const hasGeoInQ = /\d{5}|near|in |around|brickell|doral|coral|kendall|miami|broward|palm|hollywood|plantation|pembroke|miramar|boca|boynton|delray|west palm|wellington|homestead|hialeah|sunrise|weston|davie|fort laud/i.test(q);
+    if (isCompetitorQ && !hasGeoInQ) {
       let md = `# BH Competitive Landscape\n\nBaptist Health tracks **${BH_COMPETITORS.length} health systems** across South Florida:\n\n`;
       md += BH_COMPETITORS.map((c, i) => `${i + 1}. ${c}`).join('\n');
-      md += `\n\n*For competitive intel on a specific system or area, ask with a ZIP code or city name to trigger the full research agent.*`;
       return md;
     }
 
