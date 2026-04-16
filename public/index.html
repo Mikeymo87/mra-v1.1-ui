@@ -386,7 +386,7 @@
     // List all segments
     if (/what (are |is )?(the )?(bh |baptist )?(segments|cohorts)|list.*segments|tell me about (the |all )?(segments|cohorts)/i.test(q)) {
       let md = `# BH Consumer Segments\n\nBaptist Health uses **${BH_SEGMENTS.length} consumer segments** for market targeting:\n\n`;
-      BH_SEGMENTS.forEach((s, i) => { md += `${i + 1}. **${s.name}** — ${s.description}\n`; });
+      BH_SEGMENTS.forEach(s => { md += `- **${s.name}** — ${s.description}\n`; });
       return md;
     }
 
