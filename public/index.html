@@ -400,9 +400,10 @@
     }
 
     // "Who are our competitors?" (no geography)
-    if (/who (are |do we )?(our |the )?(competitor|rival)|what (competitor|rival|system)s? do we track/i.test(q)) {
-      let md = `# BH Competitive Landscape\n\nBaptist Health tracks **${BH_COMPETITORS.length} health systems**:\n\n`;
+    if (/who (are |do we )?(our |the )?(main )?(competitor|rival)|what (competitor|rival|system)s? do we track/i.test(q)) {
+      let md = `# BH Competitive Landscape\n\nBaptist Health tracks **${BH_COMPETITORS.length} major health systems** across South Florida:\n\n`;
       md += BH_COMPETITORS.map((c, i) => `${i + 1}. ${c}`).join('\n');
+      md += `\n\n---\n\nThese are the major systems. For specific service lines (urgent care, imaging, etc.), there are also smaller independent operators, retail clinics (CVS MinuteClinic, Walgreens), and concierge practices that compete locally. Ask about a specific area or service line to get the full competitive picture.`;
       return md;
     }
 
