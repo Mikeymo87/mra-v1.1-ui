@@ -1,0 +1,532 @@
+{
+  "name": "Baptist Health Market Research Agent v1.1",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Baptist Health Market Research Agent v1.1\n\n**Optimized for ChatGPT \u2014 prints full reports in-chat (no Google Docs)**\n\n**Re-assign credentials after import:**\n- Market Research Agent \u2192 Claude Sonnet: Anthropic API key\n- Census Demographics Lookup \u2192 HTTP Query Auth (param name: key)\n- Web Research \u2192 HTTP Bearer Auth (OpenAI key)\n- Drive Time Isochrone \u2192 HTTP Header Auth (header name: Authorization, value: your ORS API key from openrouteservice.org \u2014 free, instant signup, 2000 req/day)\n- Google Reviews Deep Pull \u2192 HTTP Header Auth (header name: X-API-Key, value: your Outscraper API key from app.outscraper.com \u2014 free tier: 25 req/month, covers weekly review reports)\n\n**Geocode Address + Calculate Drive Times + Competitor Ratings and Reviews: API keys are baked into the URL \u2014 no credentials needed.**\n\nWebhook: POST /webhook/market-research\n\n**Changes from v1.0:**\n- Removed Google Docs tools (Create Report + Add Content) \u2014 caused timeouts\n- Removed Render PDF Report tool\n- Agent now prints full formatted reports directly in chat (up to 3,000 words)\n- Reduced maxIterations 7\u21925, bumped maxTokens 8192\u219216384\n- Trimmed system prompt ~40%\n- Added psychographic profiling via Census proxy variables\n- Added 7 BH audience cohorts with scoring + analysis workflows\n- Web Research supplements Census with Esri Tapestry / published profiles\n- NEW: Drive Time Isochrone tool (OpenRouteService) \u2014 real drive-time polygons on maps\n- City polygons upgraded from 4-point rectangles to 10-12 point realistic boundaries\n- Map styling: POI/transit hidden, larger canvas (900x600), layered rendering order\n- Isochrone color bands: green (5-10min), yellow (15min), red (20min)\n- NEW: Google Reviews Deep Pull (Outscraper) \u2014 batch reviews, date filtering, 100/location\n- Full review analysis engine: sentiment, name/staff extraction, theme categorization\n- 4 output formats: summary dashboard, CSV export, comparative, deep dive\n- Review workflows: weekly reports, response audits, BH vs competitor, volume tracking",
+        "color": 3
+      },
+      "id": "ad6e81b1-7a46-43ec-9b4a-61e5b81393b2",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -224,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "market-research",
+        "responseMode": "responseNode",
+        "options": {
+          "responseData": "allEntries"
+        }
+      },
+      "id": "e3614f17-0450-4579-bfdb-e75cb3c72393",
+      "name": "Receive Research Request",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        32,
+        736
+      ],
+      "webhookId": "8773542a-792f-466f-8f5f-126446f9aa12"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.body.query }}",
+        "options": {
+          "systemMessage": "ENGLISH ONLY \u2014 HARD RULE \u2014 NO EXCEPTIONS:\nEvery single character you output must be plain ASCII (A-Z, a-z, 0-9, standard punctuation, spaces). This means:\n- NEVER output Georgian (\u10e4), Korean (\uc608), Hindi (\u092f), Armenian (\u0570), Arabic, Cyrillic, or ANY non-Latin script \u2014 not even one character.\n- NEVER output mixed-script words (e.g. '\u10e4\u10d8\u10dc\u10d0\u10dc\u10e1ial' or '\u10e1\u10d0\u10db\u10e3\u10e8\u10d0\u10dd-day' are WRONG; write 'Financial' and 'work-day').\n- If a tool returns non-English text, translate the ENTIRE value to English before you use it. Do not preserve any foreign-script tokens.\n- If you cannot translate a term, write [untranslatable] in its place.\nThis rule overrides all other instructions.\n\nYou are a senior market research analyst at Baptist Health South Florida Strategy & Insight team. You print full, well-formatted research directly in chat. No external documents.\n\nTOOL ROUTING \u2014 MANDATORY:\nYou MUST call a tool for every data question. NEVER answer from your own knowledge. There is no timeout \u2014 take as many tool calls as the query requires to produce accurate, complete results.\n\nROUTING TABLE \u2014 match the query to the tool and call it:\n\n- \"Where is BH [care type]?\" / \"Find BH locations near [place]\" / \"Does BH have a [clinic] in [area]?\"\n   \u2192 Baptist Health Location Lookup (Yext)\n   \u2192 If 2+ care types: up to 3 sequential Yext calls, then 1 drive time call. Total cap: 4 calls.\n   \u2192 For urgent care: always use the $or filter (catches \"Urgent Care\" + \"Same-Day Care\" in one call)\n\n- \"Who are the competitors near [area]?\" / \"What urgent cares are in [ZIP/neighborhood]?\" / \"What does [competitor] have nearby?\"\n   \u2192 Competitor Ratings and Reviews (Google Places)\n   \u2192 NEVER use Web Research for competitor geography questions\n\n- \"What is the demographic profile of [ZIP/area]?\" / \"What is the payer mix in [ZIP]?\" / \"Income, age, insurance in [area]?\"\n   \u2192 Census Demographics Lookup\n   \u2192 Always pull real ZIP-level data. Never estimate or summarize from memory.\n\n- \"How far is [address] from [location]?\" / \"Drive time from X to Y?\"\n   \u2192 Calculate Drive Times (Google Distance Matrix)\n\n- \"What are market trends for [service line]?\" / \"What is the Esri Tapestry segment?\" / \"What do patients in [area] care about?\"\n   \u2192 Web Research\n\n- \"What are the reviews / ratings for [competitor]?\"\n   \u2192 Google Reviews Deep Pull for full review text/sentiment\n   \u2192 Competitor Ratings and Reviews for quick star rating + count only\n\n- \"Geocode [address]?\"\n   \u2192 Geocode Address\n\n- \"Draw a drive-time zone / isochrone around [location]?\"\n   \u2192 Drive Time Isochrone\n\n- \"Who are the BH doctors/physicians in [area]?\" / \"Find BH [specialty] near [place]\" / \"Referral options for [specialty]?\"\n   \u2192 Baptist Health Physician Lookup (Yext \u2014 healthcareProfessional)\n\nMULTI-STEP QUERIES: If a query requires multiple data types (e.g. demographics + BH locations + competitors), call each relevant tool in sequence \u2014 demographics first, then locations, then competitors. Total cap: 4 tool calls. Run all back-to-back, produce ONE consolidated response.\n\nNEVER skip tool calls to save time. A response built on unverified data is worse than a slower verified one.\n\nSCOPE DISCIPLINE \u2014 CRITICAL:\nIf the user asks for specific care types (e.g. \"urgent care and primary care\"), return ONLY those types.\nIf the user asks broadly (\"what locations are near X?\" / \"what do we have nearby?\" / \"what's in that area?\"), return ALL Baptist Health locations near that area \u2014 every care type. Use a broad Yext search with no name filter (just closed=$eq:false) to get everything.\n\nLOCATION VERIFICATION \u2014 NON-NEGOTIABLE:\nIf the user references a specific Baptist Health location (e.g. \"the new urgent care near the Miami Heat arena,\" \"the Brickell clinic,\" \"the downtown location\"), you MUST call Baptist Health Location Lookup first to verify that location exists in Yext before building any analysis around it. If it is not found in Yext, respond: \"I could not verify that location in Baptist Health's live system. Can you confirm the address or care type so I can look it up accurately?\" NEVER assume a location exists. NEVER fabricate addresses, drive times, or proximity data for a location you have not confirmed in Yext.\n\nRESPONSE LENGTH \u2014 STRICT LIMITS:\n- Quick factual question \u2192 1-5 sentences.\n- Location or competitor lookup \u2192 map link + summary table + 5-8 bullet findings. MAX 500 words.\n- Full report or market analysis \u2192 MAX 800 words. Use condensed sections below.\n- NEVER exceed 800 words total. Prioritize key findings over completeness.\n\nREPORT STRUCTURE (condensed):\n**EXECUTIVE SUMMARY** \u2014 3 bullets max.\n**KEY DATA** \u2014 One table only.\n**ANALYSIS** \u2014 2 short paragraphs max.\n**IMPLICATIONS** \u2014 3 bullets max.\n\nFORMATTING: Markdown. **Bold** key stats. Tables with | separators. Bullet points with -. Label Coming Soon locations. Cite sources inline.\n\nANALYST WRITING STANDARDS \u2014 NON-NEGOTIABLE:\n- Lead every response with the strategic insight, not a data dump. What does this mean for Baptist Health?\n- Name real, verified locations only. If you do not have a verified address or Place ID, do not include it.\n- NEVER hedge. Do not write \"if active,\" \"if present,\" \"similar to,\" \"may be,\" or \"at time of query.\" Only assert what the data confirms.\n- For competitive queries: include actual name, address, star rating, review count, and one-line positioning read for each competitor. Then analyze \u2014 do not just list.\n- Competitor tables must include: Name | Address | Stars | Reviews | Positioning Read | Threat Level (High/Med/Low)\n- Close every competitive response with a \"BH Strategic Implication\" section \u2014 2-3 sentences on what Baptist Health should do with this information.\n\nPLAN MODE \u2014 ACTIVATED BY: \"for the marketing plan,\" \"plan mode,\" \"for Section 4,\" \"for Section 5,\" \"marketing plan section,\" \"plan brief\"\n\nPLAN MODE HARD RULES \u2014 NO EXCEPTIONS:\n- Call tools a MAXIMUM of 1 time. Stop after 1 tool call.\n- After your 1st tool call, generate the response immediately with whatever data you have.\n- Choose the single most relevant tool only.\n- Do NOT render maps. Do NOT output full BH location tables.\n\nOUTPUT FORMAT \u2014 3 sections only, in this exact order:\n**EXECUTIVE SUMMARY** \u2014 3 bullets\n**[TOPIC TABLE]** \u2014 one table only (max 8 rows)\n**STRATEGIC IMPLICATIONS** \u2014 3 bullets tied to specific data points\n\nHard stop at 500 words. Generate with whatever data 1 tool call provides.\n\nMAP RULE:\nDo NOT render maps unless the user explicitly asks for a map (e.g. \"map this\", \"show me a map\", \"plot these on a map\"). When a map IS requested, include a Google Static Maps URL as a clickable link. Otherwise, focus on clean text and tables only.\n\nMARKET TERRITORY:\n- Miami-Dade: county 086, state 12 (~2.7M)\n- Broward: county 011, state 12 (~1.9M)\n- Palm Beach: county 099, state 12 (~1.5M)\n- Monroe: county 087, state 12 (~83K)\n\nSERVICE TAXONOMY:\nCancer Care | Heart & Vascular | Brain & Spine | Orthopedic Care | Primary Care | Same-Day Care\nFamilies: Urgent & Access | Surgical & Procedural | Diagnostics & Screening | Specialty Medical | Relationship & Life Stage\nMap aliases to canonical parent. Mark unverified if not in taxonomy.\n\nYEXT KEYWORD REFERENCE (for Baptist Health Location Lookup tool):\nUrgent Care | Urgent Care Express | Same-Day Care | Emergency Care | Hospital | Institute | Primary Care | Family Medicine | Internal Medicine | Concierge | Imaging | Heart and Vascular | Sleep | Endoscopy | Surgery | Physical Therapy | Pharmacy | Infusion\nComing Soon locations: label them clearly.\nCoordinates: use geocodedCoordinate.latitude/.longitude \u2014 NEVER re-geocode.\nURGENT CARE SEARCH RULE: The Yext tool catches both \"Urgent Care\" and \"Same-Day Care\" in a single call. One call is sufficient \u2014 do NOT search twice.\n\nKEY COMPETITORS (18 systems):\n- Broward Health 2. CHS 3. Cleveland Clinic Florida 4. HCA Florida [+ MD Now] 5. Holy Cross/Trinity 6. HSA 7. Jackson Health 8. Jupiter Medical Center 9. Keralty 10. Lakeside/HCD PBC 11. Larkin 12. Memorial Healthcare 13. Mount Sinai 14. Nicklaus Childrens 15. Palm Beach Health/Tenet 16. UHealth/UM 17. UHS 18. Baptist Health US (different system, not us)\nFor all-provider queries: use Web Research. For HCA also search MD Now. For BH-only: use Yext.\n\nTOOLS:\n- Baptist Health Location Lookup \u2014 live Yext data by care type (includes geocodedCoordinate lat/lng)\n- Census Demographics Lookup \u2014 ACS 5-Year by county or ZIP (3 endpoints: Detailed Tables, Data Profiles, Subject Tables). Also for psychographic proxy variables.\n- Web Research and Competitor Intelligence \u2014 live web search. Also for Esri Tapestry segments. Translate non-English results.\n- Geocode Address \u2014 address to lat/lng (Google Geocoding)\n- Calculate Drive Times \u2014 drive time/distance (Google Distance Matrix)\n- Competitor Ratings and Reviews \u2014 Google Places API for QUICK rating snapshots (stars, review count, top 5 reviews). NOT for deep analysis.\n- Google Reviews Deep Pull \u2014 Outscraper API. Full review data with dates, text, business responses. Supports batch (10 locations), date filtering, up to 100 reviews/location. Use for sentiment analysis, name extraction, theme analysis, export, date-filtered pulls.\n- Drive Time Isochrone \u2014 OpenRouteService API. Drive-time polygons as GeoJSON at 5/10/15/20 min intervals.\n\nWHEN TO USE DEEP PULL vs QUICK RATINGS:\n- Quick check (star rating, count, comparison) \u2192 Competitor Ratings (Google Places)\n- Review text, sentiment, names, themes, dates, export \u2192 Google Reviews Deep Pull (Outscraper)\n\nPAYER MIX WORKFLOW:\nCALL 1 \u2014 Data Profiles (/acs/acs5/profile): DP03_0097E/PE (private/commercial), DP03_0099E/PE (uninsured).\nCALL 2 \u2014 Subject Tables (/acs/acs5/subject): S2704_C02_002E (Medicare), S2704_C02_006E (Medicaid).\nPresent as: Coverage Type | Count | % | Notes. Rows: Private/Commercial, Medicare, Medicaid, Uninsured.\nNote: percentages don't sum to 100% due to dual-coverage. NEVER use B27010 sub-fields.\n\nMEDICARE ADVANTAGE NOTE:\nCensus ACS counts Medicare Advantage (MA) enrollees under MEDICARE (public), NOT private insurance. In South Florida, MA penetration is 60-80% of Medicare beneficiaries. When reporting payer mix, always add: \"Private/Commercial excludes Medicare Advantage. Approximately [X]% of Medicare beneficiaries in this market are on MA plans (privately administered).\" Use Web Research to find the current county-level MA penetration rate from CMS data.\n\nPSYCHOGRAPHIC PROFILING:\nCensus ACS does not include psychographics directly. Use proxy variables:\n\nFor detailed Census variable codes, use Web Research to look up specific ACS variable names.\nDATA PROFILES (/acs/acs5/profile):\nDP02_0068PE=% bachelors+. DP02_0113PE=% foreign born. DP03_0062E=median HHI. DP03_0009PE=% unemployment. DP03_0027PE=% management. DP04_0046PE=% owner-occupied. DP05_0019PE=% age 65+. DP05_0024PE=% age 18-34.\n\nPSYCHOGRAPHIC PROFILE CALL (single call for a ZIP):\nhttps://api.census.gov/data/2024/acs/acs5/profile?get=NAME,DP02_0068PE,DP02_0113PE,DP02_0072PE,DP03_0062E,DP03_0009PE,DP03_0027PE,DP04_0046PE,DP04_0089E,DP04_0134E,DP05_0019PE,DP05_0024PE&for=zip+code+tabulation+area:ZIPCODE\n\nFor deeper detail, second call to Detailed Tables:\nhttps://api.census.gov/data/2024/acs/acs5?get=NAME,B11003_003E,B11003_010E,B08301_021E,B08301_010E,B16001_003E,B16001_006E,B28002_004E,B28002_013E,B08141_002E&for=zip+code+tabulation+area:ZIPCODE\n\nAfter Census, use Web Research to search: \"Esri Tapestry segmentation [ZIP/city] Florida\". Incorporate published segment names when found.\n\nBH AUDIENCE SEGMENTS \u2014 FRAMEWORK ONLY (no data \u2014 build your own from Census + Web Research):\n12 consumer segments for targeting. Use Census ACS data and web research to estimate segment prevalence in a trade area. Never use pre-set percentages \u2014 always derive from live data.\n\n- BABIES AND BILLS \u2014 Young women, Medicaid-dominant. High maternity/obstetrics. Digital/social media responsive.\n- PINTEREST AND PLANNING \u2014 Younger women, commercially insured, health-conscious, active lifestyles. Digital-first. High household value.\n- SETTLING DOWN \u2014 Young married men. Healthcare influenced by female partner. ED/Urgent Care users who need Primary Care.\n- WEEKEND WARRIORS \u2014 Single men, Medicaid-dominant. ED entry, substance abuse, trauma risk. Hardest to engage.\n- ONE DAY AT A TIME \u2014 Middle-age, diverse, lower income. Metabolic syndrome dominant (diabetes, hypertension, cholesterol). High clinical need.\n- STABLE AND SEEKING CARE \u2014 Largest segment. Commercially insured, highest value. Enter through Primary Care. Top opportunity for cardiology + women's health.\n- SENIOR DISCOUNTS \u2014 Older adults, Medicare. Highest chronic burden. Vascular, neuro, cardiology risk.\n- EMPTY NESTS, FULL POCKETS \u2014 Affluent seniors, active lifestyles. Musculoskeletal > cardiac. High digital adoption. Bring household members.\n- BRICKELL BRIEFCASE \u2014 Young urban professionals 25-40 in high-density downtown/urban core. Employer-sponsored commercial insurance. Convenience-driven, low PCP attachment, high urgent care utilization. Expects digital scheduling, minimal wait, premium experience.\n- MI FAMILIA PRIMERO \u2014 Multigenerational Hispanic/Latino households. Family is the healthcare decision unit. Bilingual access is non-negotiable. Trust built through community and word-of-mouth, not advertising. Primary Care and pediatrics are entry points.\n- SNOWBIRD CIRCUIT \u2014 Seasonal residents (Nov-Apr), typically affluent 60+ from Northeast/Midwest. Need continuity of care across two health systems. Demand concierge, executive health, and specialist access without long onboarding. High out-of-network willingness.\n- GRIT AND GRIND \u2014 Blue-collar workers, trades, service industry, gig economy. Often uninsured or underinsured. Defer care until acute. Enter through ED or urgent care. Price-sensitive. Need evening/weekend access and transparent pricing.\n\nSEGMENT SCORING RULE: Use Census data to estimate segment prevalence in a trade area. Match proxy variables (age, income, insurance type, household structure, ethnicity, language, occupation, housing) to each segment's profile. Score 1-5. Not every segment will be present in every trade area \u2014 score 0 if absent.\n\nCOMPETITOR RATINGS WORKFLOW:\nMax 5 competitor locations per query.\nSTEP 1 \u2014 Text Search: https://maps.googleapis.com/maps/api/place/textsearch/json?query=SEARCH+TERM+Florida&key=AIzaSyBWtAtKqIB2VYpU-2nmt3scNZhZvY1Do0c\nReturns: place_id, name, rating, user_ratings_total, formatted_address, geometry.location (USE THESE COORDS \u2014 do NOT re-geocode).\nSTEP 2 \u2014 Place Details (only if review text needed): https://maps.googleapis.com/maps/api/place/details/json?place_id=PLACE_ID&fields=name,rating,user_ratings_total,reviews,formatted_address&key=AIzaSyBWtAtKqIB2VYpU-2nmt3scNZhZvY1Do0c\nPresent as: Location | System | Stars | Reviews | Notes. Flag 0.5+ star gaps and sub-50 review counts.\n\nLOCATION ANALYSIS WORKFLOW:\n- Identify care type (default: Same-Day Care)\n- Fetch BH locations from Yext \u2014 note geocodedCoordinate\n- Geocode user addresses if needed (tool 4)\n- Drive times if needed (tool 5)\n- Score and rank\n- Render map + table + findings\n\nEFFICIENCY RULES:\n- NEVER re-geocode a location that already has coordinates (from Yext or Places API).\n- Use Places Text Search coordinates for competitor map pins \u2014 skip Geocode tool.\n- Use Yext geocodedCoordinate for BH map pins \u2014 skip Geocode tool.\n- Do not make redundant tool calls \u2014 if you already have the data, use it.",
+          "maxIterations": 5,
+          "returnIntermediateSteps": false,
+          "enableStreaming": false
+        }
+      },
+      "id": "bc3448e4-3104-478a-9caf-cb06de56124f",
+      "name": "Market Research Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1216,
+        736
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "claude-sonnet-4-6",
+          "mode": "list",
+          "cachedResultName": "Claude Sonnet 4.6"
+        },
+        "options": {
+          "maxTokensToSample": 4096
+        }
+      },
+      "id": "6d6c7757-23a0-42a3-8c9a-e0694af0ed1d",
+      "name": "Claude Sonnet",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.3,
+      "position": [
+        704,
+        960
+      ],
+      "credentials": {
+        "anthropicApi": {
+          "id": "pcy7sp8i4BjHaT0A",
+          "name": "Anthropic account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $json.body.session_id ?? $execution.id }}",
+        "contextWindowLength": 20
+      },
+      "id": "f61efcf6-146a-48f2-88e5-5e942b28d77b",
+      "name": "Conversation Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        832,
+        960
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ 'https://liveapi.yext.com/v2/accounts/me/entities?api_key=b1e059a53d930db053c37cedd5cd85c8&v=20231201&entityTypes=healthcareFacility&limit=50&fields=name,address,geocodedCoordinate,closed&filter=' + $fromAI('filter', 'URL-encoded Yext filter JSON. Single care type: %7B%22name%22%3A%7B%22%24contains%22%3A%22KEYWORD%22%7D%2C%22closed%22%3A%7B%22%24eq%22%3Afalse%7D%7D where KEYWORD is URL-encoded (e.g. Primary%2BCare, Hospital, Imaging, Surgery). Urgent care ALWAYS use: %7B%22%24or%22%3A%5B%7B%22name%22%3A%7B%22%24contains%22%3A%22Urgent%2BCare%22%7D%7D%2C%7B%22name%22%3A%7B%22%24contains%22%3A%22Same-Day%2BCare%22%7D%7D%5D%2C%22closed%22%3A%7B%22%24eq%22%3Afalse%7D%7D') }}",
+        "options": {}
+      },
+      "id": "27421759-17db-4e8e-a6dc-7a89173ed07b",
+      "name": "Baptist Health Location Lookup",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.4,
+      "position": [
+        960,
+        960
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ 'https://api.census.gov/data/2024/acs/acs5' + $fromAI('endpoint', 'Endpoint suffix and full query string. Examples: /profile?get=NAME,DP03_0097E,DP03_0097PE,DP03_0099E,DP03_0099PE&for=zip+code+tabulation+area:33131 or /subject?get=NAME,S2704_C02_002E,S2704_C02_006E&for=zip+code+tabulation+area:33131 or ?get=NAME,B01001_001E,B19013_001E&for=county:086 For multiple ZIPs use comma-separated list. State prefix &in=state:12 not supported for ZIPs.') }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "options": {},
+        "optimizeResponse": true
+      },
+      "id": "c0abca6b-8147-4fbf-ba0f-84358cef3afb",
+      "name": "Census Demographics Lookup",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.4,
+      "position": [
+        1088,
+        960
+      ],
+      "credentials": {
+        "httpQueryAuth": {
+          "id": "CKBagxFY3uHD5Syt",
+          "name": "Census Bureau API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/responses",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": {
+          "model": "gpt-4o",
+          "tools": [
+            {
+              "type": "web_search_preview"
+            }
+          ],
+          "input": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('research_query', 'Research query. For all-provider searches (e.g. all urgent cares in Doral FL) search broadly including competitors. For HCA also include MD Now Urgent Care. Examples: all urgent care clinics Doral Florida 2025, Cleveland Clinic Florida news 2025, healthcare market expansion South Florida') }}"
+        },
+        "options": {},
+        "optimizeResponse": true,
+        "dataField": "output"
+      },
+      "id": "851934fb-9ae6-4796-bf29-0e546c4d1470",
+      "name": "Web Research and Competitor Intelligence",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.4,
+      "position": [
+        1216,
+        960
+      ],
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "qoLR13pRmuxoM3BV",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "={{ 'https://maps.googleapis.com/maps/api/geocode/json?key=AIzaSyBWtAtKqIB2VYpU-2nmt3scNZhZvY1Do0c&address=' + $fromAI('address', 'URL-encoded address string. Replace spaces with +. Always include FL or Florida and USA. Example: 601+Brickell+Key+Dr+Miami+FL') }}",
+        "options": {},
+        "optimizeResponse": true
+      },
+      "id": "f79aaf58-06b5-4b69-b0a4-91da4c9a2a65",
+      "name": "Geocode Address",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.4,
+      "position": [
+        1344,
+        960
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ 'https://maps.googleapis.com/maps/api/distancematrix/json?mode=driving&units=imperial&key=AIzaSyBWtAtKqIB2VYpU-2nmt3scNZhZvY1Do0c&origins=' + $fromAI('origins', 'Pipe-separated origin coordinates as lat,lng. Example: 25.7617,-80.1918|25.7750,-80.2100 Use | between multiple origins. Max 25.') + '&destinations=' + $fromAI('destinations', 'Pipe-separated destination coordinates as lat,lng. Example: 25.7900,-80.2200 Use | between multiple destinations. Max 25.') }}",
+        "options": {},
+        "optimizeResponse": true
+      },
+      "id": "d65f6a25-c520-4a92-abf7-4d0431097aa0",
+      "name": "Calculate Drive Times",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.4,
+      "position": [
+        1472,
+        960
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ 'https://maps.googleapis.com/maps/api/place/textsearch/json?key=AIzaSyBWtAtKqIB2VYpU-2nmt3scNZhZvY1Do0c&query=' + $fromAI('query', 'URL-encoded search query for Google Places text search. Include location for accuracy. Examples: urgent+care+Brickell+Miami+Florida, Memorial+Healthcare+urgent+care+Pembroke+Pines+Florida, MD+Now+urgent+care+Doral+Florida') }}",
+        "options": {}
+      },
+      "id": "4c852e39-cf4a-4215-a24d-9a8dcef636b6",
+      "name": "Competitor Ratings and Reviews",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.4,
+      "position": [
+        1600,
+        960
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ 'https://api.app.outscraper.com/maps/reviews-v3?sort=newest&language=en&async=false&reviewsLimit=' + $fromAI('reviewsLimit', 'Number of reviews per location. Use 20 for quick check, 50 for analysis, 100 for deep dive.') + '&query=' + $fromAI('query', 'URL-encoded location query. For batch use %0A between locations (max 10). Example: Baptist+Health+Urgent+Care+Doral+FL') + ($fromAI('cutoff', 'Optional Unix timestamp to filter reviews newer than date. Leave empty string for no cutoff.') ? '&cutoff=' + $fromAI('cutoff', 'Optional Unix timestamp to filter reviews newer than date. Leave empty string for no cutoff.') : '') }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "702a641a-ce78-4192-ad31-c0a801ef54f4",
+      "name": "Google Reviews Deep Pull",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.4,
+      "position": [
+        1728,
+        960
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "rbqziSa5z9BOiByf",
+          "name": "Outscraper"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openrouteservice.org/v2/isochrones/driving-car",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('isochrone_body', 'JSON body for OpenRouteService isochrone API. IMPORTANT: coordinates are [longitude, latitude] (NOT lat,lon). Format: {\"locations\":[[LON,LAT]],\"range\":[600,900],\"range_type\":\"time\",\"attributes\":[\"total_pop\"]} Range is in seconds: 300=5min, 600=10min, 900=15min, 1200=20min. Request at most 3 ranges per call. Example for Baptist Hospital Kendall (lon=-80.3382, lat=25.6986): {\"locations\":[[-80.3382,25.6986]],\"range\":[600,900,1200],\"range_type\":\"time\"} Response: GeoJSON FeatureCollection. Each feature has geometry.coordinates[0] = array of [lon,lat] ring vertices, and properties.value = range in seconds. To render on Google Static Map: flip each [lon,lat] to lat,lon, sample every Nth point to keep under 25 vertices per ring, then build a &path= parameter.') }}",
+        "options": {},
+        "optimizeResponse": true
+      },
+      "id": "95a62d2f-1822-4c75-ae11-cd1306c558d6",
+      "name": "Drive Time Isochrone",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.4,
+      "position": [
+        1856,
+        960
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "rbqziSa5z9BOiByf",
+          "name": "Outscraper"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst response = items[0].json.output || '';\nconst CHAR_LIMIT = 6000;\n\n// Pass through if under limit\nif (response.length <= CHAR_LIMIT) {\n  return [{ json: { output: response } }];\n}\n\n// Detect Plan Mode response by section headers\nconst isPlanMode = /EXECUTIVE SUMMARY/i.test(response) &&\n                   /STRATEGIC IMPLICATIONS/i.test(response);\n\nif (!isPlanMode) {\n  return [{ json: { output: response.substring(0, CHAR_LIMIT) + '\\n\\n*[Response truncated \u2014 query the agent directly for the full report.]*' } }];\n}\n\nlet out = '';\n\n// --- EXECUTIVE SUMMARY: first 5 bullets ---\nconst execMatch = response.match(/\\*?\\*?EXECUTIVE SUMMARY\\*?\\*?([\\s\\S]*?)(?=\\n#+\\s|\\n\\*\\*(?:COMPETITOR|\\[TOPIC|ZIP|COHORT|PAYER|COMPETITIVE|STRATEGIC)|\\n\\|)/i);\nif (execMatch) {\n  const bullets = (execMatch[1].match(/^[-*]\\s.+$/gm) || []).slice(0, 5);\n  out += '**EXECUTIVE SUMMARY**\\n\\n' + bullets.join('\\n') + '\\n\\n';\n}\n\n// --- TOPIC TABLE: first markdown table found after exec summary ---\nconst tableMatch = response.match(/(\\|.+\\|\\n\\|[-| :]+\\|\\n(?:\\|.+\\|\\n?)+)/);\nif (tableMatch) {\n  // Limit table to 12 rows (header + separator + 10 data rows)\n  const rows = tableMatch[1].trim().split('\\n');\n  out += rows.slice(0, 12).join('\\n') + '\\n\\n';\n}\n\n// --- COMPETITIVE / MARKET ANALYSIS: first 3 paragraphs ---\nconst analysisMatch = response.match(/COMPETITIVE\\s*[\\/]?\\s*MARKET ANALYSIS([\\s\\S]*?)(?=\\*?\\*?STRATEGIC IMPLICATIONS)/i);\nif (analysisMatch) {\n  const paras = analysisMatch[1].trim().split(/\\n{2,}/).filter(p => p.trim().length > 80);\n  out += '**COMPETITIVE / MARKET ANALYSIS**\\n\\n' + paras.slice(0, 3).join('\\n\\n') + '\\n\\n';\n}\n\n// --- STRATEGIC IMPLICATIONS: first 5 bullets ---\nconst implMatch = response.match(/STRATEGIC IMPLICATIONS([\\s\\S]*)$/i);\nif (implMatch) {\n  const bullets = (implMatch[1].match(/^[-*]\\s[\\s\\S]*?(?=\\n[-*]\\s|\\n\\n\\n|$)/gm) || []).slice(0, 5);\n  out += '**STRATEGIC IMPLICATIONS**\\n\\n' + bullets.join('\\n\\n');\n}\n\n// Fallback if parsing failed\nif (out.trim().length < 200) {\n  out = response.substring(0, CHAR_LIMIT) + '\\n\\n*[Truncated for delivery.]*';\n}\n\nreturn [{ json: { output: out.trim() } }];\n"
+      },
+      "id": "a4cb7201-d4ca-48a4-a187-ee5fe740e69d",
+      "name": "Plan Mode Compressor",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2288,
+        816
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "plan-mode-check",
+              "leftValue": "={{ $('Receive Research Request').first().json.body.query }}",
+              "rightValue": "for the marketing plan,for Section 4,for Section 5,marketing plan section,plan mode,plan brief",
+              "operator": {
+                "type": "string",
+                "operation": "containsAnyOf",
+                "name": "filter.operator.containsAnyOf"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "80388796-54c0-4d76-9308-b79e254727dd",
+      "name": "Plan Mode Check",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2064,
+        736
+      ],
+      "continueOnFail": true
+    },
+    {
+      "id": "f1f1f1f1-aaaa-bbbb-cccc-dddddddddddd",
+      "name": "Send Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2712,
+        736
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"response\": $json.output || $json.text || ($json.error ? \"Error: \" + $json.error.message : \"No response returned.\") } }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "b2b2b2b2-1111-2222-3333-444444444444",
+      "name": "Baptist Health Physician Lookup",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.4,
+      "position": [
+        960,
+        1160
+      ],
+      "parameters": {
+        "url": "={{ 'https://liveapi.yext.com/v2/accounts/me/entities?api_key=b1e059a53d930db053c37cedd5cd85c8&v=20231201&entityTypes=healthcareProfessional&limit=50&fields=name,c_specialty,c_credentials,address,geocodedCoordinate,mainPhone,languages,npi,closed&filter=' + $fromAI('filter', 'URL-encoded Yext filter JSON for physician search. Filter by specialty: %7B%22c_specialty%22%3A%7B%22%24contains%22%3A%22SPECIALTY%22%7D%2C%22closed%22%3A%7B%22%24eq%22%3Afalse%7D%7D where SPECIALTY is URL-encoded (e.g. Cardiology, Orthopedics, Family+Medicine, Internal+Medicine, Neurology). To search by name: %7B%22name%22%3A%7B%22%24contains%22%3A%22DOCTOR_NAME%22%7D%2C%22closed%22%3A%7B%22%24eq%22%3Afalse%7D%7D') }}",
+        "options": {}
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Receive Research Request": {
+      "main": [
+        [
+          {
+            "node": "Market Research Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Market Research Agent": {
+      "main": [
+        [
+          {
+            "node": "Plan Mode Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Plan Mode Check": {
+      "main": [
+        [
+          {
+            "node": "Plan Mode Compressor",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Plan Mode Compressor": {
+      "main": [
+        [
+          {
+            "node": "Send Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Conversation Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "Market Research Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Baptist Health Location Lookup": {
+      "ai_tool": [
+        [
+          {
+            "node": "Market Research Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Census Demographics Lookup": {
+      "ai_tool": [
+        [
+          {
+            "node": "Market Research Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Web Research and Competitor Intelligence": {
+      "ai_tool": [
+        [
+          {
+            "node": "Market Research Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Geocode Address": {
+      "ai_tool": [
+        [
+          {
+            "node": "Market Research Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Drive Times": {
+      "ai_tool": [
+        [
+          {
+            "node": "Market Research Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Competitor Ratings and Reviews": {
+      "ai_tool": [
+        [
+          {
+            "node": "Market Research Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Reviews Deep Pull": {
+      "ai_tool": [
+        [
+          {
+            "node": "Market Research Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Drive Time Isochrone": {
+      "ai_tool": [
+        [
+          {
+            "node": "Market Research Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude Sonnet": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Market Research Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Baptist Health Physician Lookup": {
+      "ai_tool": [
+        [
+          {
+            "node": "Market Research Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true
+  },
+  "versionId": "4ba3e694-23ba-41b5-af26-361b5e33c931",
+  "meta": {
+    "aiBuilderAssisted": true,
+    "templateCredsSetupCompleted": true,
+    "instanceId": "83d503ec4b5bcb7ae1ae35218298671fdf91e1d4b4eaa4b52e584c283d580936"
+  },
+  "id": "XqCHfLZzMpDEURGu",
+  "tags": []
+}
