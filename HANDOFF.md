@@ -1,118 +1,187 @@
-# BH Market Research Agent v1.1 — Session Handoff
+# BH Market Research Agent v2.1 — Session Handoff
 
 ## Project Locations
 
 | What | Path |
 |---|---|
-| **App (UI)** | `~/Desktop/Claude/MRA-v1.1-UI/` |
-| **n8n Workflow JSON** | `~/Desktop/Claude/MRA-v1.1-UI/bh-mra-v1.1-workflow.json` |
+| **App** | `~/Desktop/Claude/MRA-v1.1-UI/` |
 | **GitHub** | https://github.com/Mikeymo87/mra-v1.1-ui |
-| **Replit** | Deployed from GitHub — Node.js, `npm start`, port 5000 |
-| **n8n Workflow** | https://michaelmora.app.n8n.cloud/workflow/XqCHfLZzMpDEURGu |
-| **n8n Webhook** | `POST https://michaelmora.app.n8n.cloud/webhook/market-research` |
+| **Replit** | bh-market-research-agentv-111.replit.app |
+| **Claude Code context** | `CLAUDE.md` in project root |
+| **Marketing Plan GPT handoff** | `MRA-CAPABILITIES.md` in project root |
 
 ---
 
-## Architecture
+## Architecture (v2.1)
 
 ```
 Browser (localhost:5000 / Replit)
-  → Smart clarification (client-side, no API cost)
-  → Local knowledge base (segments, competitors, strategy — no API cost)
-  → Response cache (sessionStorage — no API cost on repeat queries)
-  → n8n webhook (POST with session_id for conversation memory)
-      → Claude Sonnet 4.6 agent (maxIterations: 5, memory: 20 messages)
-          → 9 tools: Yext locations, Yext physicians, Census, Google Places,
-            Drive Times, Geocode, Web Research, Outscraper Reviews, ORS Isochrone
-      → Plan Mode Check → Send Response (direct, no async/polling)
+  → sessionStorage cache (cleared on refresh)
+  → POST /api/chat (SSE streaming)
+      → Express server (server.js)
+          → Anthropic SDK (claude-sonnet-4-20250514)
+              → tool_use loop (max 25 iterations)
+                  → 9 tools: Yext facilities, Yext physicians, Census,
+                    Google Places, Distance Matrix (flattened), Geocode,
+                    Web Research, Outscraper Reviews, ORS Isochrone
+              → SSE stream response back to browser
 ```
 
----
-
-## What Changed This Session (April 15, 2026)
-
-### n8n Workflow Changes
-- **LLM:** Tested GPT-4.1 mini, reverted to Claude Sonnet 4.6 (better instruction following)
-- **Removed async polling pattern** — was: Generate Job ID → Acknowledge → Store → Poll → Return. Now: Webhook → Agent → Respond directly. No more job_id/polling
-- **Error handling:** `continueOnFail: true` on Agent + Plan Mode Check nodes so errors reach the response node instead of hanging
-- **System prompt trimmed 36%** — removed city polygons (1,200 tokens), brand colors, isochrone rendering, detailed Census variable listings, ZIP county URL lists
-- **Maps opt-in only** — agent no longer renders Static Maps URLs unless explicitly asked
-- **Tool routing rewritten** — explicit routing table (9 query types → specific tools). Agent must call a tool for every data question, never answer from memory
-- **Scope discipline updated** — specific care type queries return only those types; broad "what's nearby" returns everything
-- **Location verification rule** — agent must check Yext before building analysis around any BH location
-- **Analyst writing standards** — no hedging, name real locations only, competitor tables must include address/stars/reviews/threat level
-- **ENGLISH ONLY rule strengthened** — explicit ASCII-only constraint with named script examples (Georgian, Korean, etc.)
-- **Medicare Advantage note added** — Census counts MA under Medicare (public), not private. Agent notes MA penetration when reporting payer mix
-- **12 BH audience segments** — replaced 7 made-up cohorts with 8 Healthgrades framework segments + 4 new South Florida segments. Framework only — no pre-set numbers, agent builds from live Census data
-- **Physician Lookup tool added** — new Yext node with `entityTypes=healthcareProfessional` for doctor/specialty searches (needs Yext schema verification)
-- **Conversation memory bumped** — 10 → 20 messages per session
-- **All tool URLs restructured** — base URLs hardcoded in templates, `$fromAI` only handles small dynamic parts (filter, keyword, address). Prevents "URL undefined" errors
-- **Yext urgent care $or filter** — searches both "Urgent Care" and "Same-Day Care" in one call
-- **Duplicate $fromAI key fixed** — Google Reviews Deep Pull had duplicate `cutoff` parameter descriptions
-
-### App (UI) Changes
-- **Built from scratch** — vanilla HTML/JS, Express server, no framework
-- **Smart clarification** — vague queries get client-side prompts before calling agent (location type picker, distance selector, ZIP input for demographics). Zero API cost
-- **Local knowledge base** — 12 BH segments, 18 competitors, service taxonomy, territory, payer mix strategy. Answers definitional questions instantly without API call
-- **Agent-first matching** — any query with geography, ZIPs, action verbs, comparisons, or data requests always goes to the agent. Local knowledge only fires on pure "what is X" questions
-- **Response cache** — sessionStorage, max 50 entries, normalized query keys. Repeat questions are free
-- **Request deduplication** — prevents duplicate in-flight API calls
-- **Enter key debounce** — 300ms on Enter, button click is immediate
-- **Yext locations pre-loaded** — all BH facilities fetched on page load for future client-side filtering
-- **Session-based memory** — unique session_id sent with every request. Follow-up questions have full context from prior messages (20-message window)
-- **Copy / PDF / Word buttons** — dark pill style under every response. Copy sends raw markdown, PDF opens print dialog, Word downloads .doc
-- **Markdown rendering** — dark header tables with BH mint text, green H3 headers, hover highlights on table rows
+**No n8n dependency.** The n8n workflow JSON is kept as backup but is not active.
 
 ---
 
-## 12 BH Consumer Segments (Framework Only)
+## What Changed — v2.1 (April 20, 2026)
 
-| Segment | Who They Are |
+### Data Accuracy Fixes
+- **Distance Matrix flattened** — server pre-processes Google's nested `rows[].elements[]` into flat `{origin, destination, duration, distance}` objects. Eliminates index misattribution that caused fabricated drive times.
+- **truncateResult limit 8000→50000** — was cutting API response JSON mid-array. Agent received broken data and hallucinated missing values.
+- **Geocoding city name mandatory** — South Florida has duplicate addresses across cities (e.g., 1400 SW 145th Ave in both Miami and Pembroke Pines, 17 miles apart). Tool description and system prompt now require exact city name and post-geocode verification.
+- **Physician filter fixed** — `c_specialty` (broken, returns API error) → `c_listOfSpecialties` (works). `c_credentials` (doesn't exist) → `degrees`.
+
+### Coverage Fixes
+- **19 facility categories** — mapped from BH Network of Care PDF. Full keyword reference with entity counts + zero-result blocklist in system prompt.
+- **22 physician specialty keywords** — verified against Yext with counts.
+- **City adjacency map** — hardcoded for 14 South Florida cities. Pembroke Pines requires 9 Yext calls (origin + 8 adjacent). Marked MANDATORY — model was skipping cities when not enforced.
+- **Urgent care bias removed** — 7 instances of UC-first language neutralized across system prompt + tool descriptions.
+
+### New Workflows
+- **DEMOGRAPHIC ANALYSIS WORKFLOW** — 6 structured output sections: Trade Area Overview, Population by ZIP, Age Distribution (with commercially addressable population 18-64), Payer Mix by ZIP, Language & Cultural Context, Marketing Implications. Validation rules prevent count/percentage confusion.
+- **PHYSICIAN ANALYSIS WORKFLOW** — mandatory city search, specialty + city filters, drive time verification, mile and minute radius support.
+- **CONTEXT-AWARE QUERIES** — overlap vs feeder classification for new facility planning. Agent asks for service lines, searches relevant categories, classifies each result.
+- **RADIUS INTERPRETATION** — handles both "within 5 miles" and "within 15 minutes." Defaults to 15-min drive time if unspecified.
+
+### Guardrails
+- **Payer Targeting Rule** — Dan's directive: marketing dollars target commercially insured (18-64) only. Medicare/Medicaid come organically. Baked into system prompt.
+- **Zero-hallucination rule** — every data point must trace to a tool call. Sources section required on every response.
+- **Truncation warning** — if tool result is truncated, agent must re-call with fewer items. Never use truncated data.
+- **Result verification** — agent must read `destination_addresses` from Distance Matrix to confirm mapping before reporting drive times.
+- **Cache-clear on refresh** — sessionStorage cleared on page load so refresh = fresh results.
+
+### Infrastructure
+- **MAX_ITERATIONS = 25** — supports 19-category location searches + 9-city physician searches.
+- **Anti-hallucination source citations** — every response ends with Sources block listing APIs called and what was returned.
+
+---
+
+## Files
+
+| File | Purpose |
 |---|---|
-| Babies and Bills | Young women, Medicaid, high maternity/obstetrics, social media |
-| Pinterest and Planning | Younger women, commercial, health-conscious, digital-first |
-| Settling Down | Young married men, healthcare influenced by partner, need PCP |
-| Weekend Warriors | Single men, Medicaid, ED entry, substance abuse, trauma |
-| One Day at a Time | Middle-age, diverse, metabolic syndrome, high clinical need |
-| Stable and Seeking Care | Largest, highest commercial + value, Primary Care entry |
-| Senior Discounts | Older Medicare, highest chronic burden, vascular/neuro/cardio |
-| Empty Nests, Full Pockets | Affluent seniors, active, musculoskeletal, high digital adoption |
-| Brickell Briefcase | Urban professionals 25-40, commercial, convenience-driven |
-| Mi Familia Primero | Hispanic/Latino multigenerational, bilingual, community trust |
-| Snowbird Circuit | Seasonal affluent 60+, continuity of care, concierge demand |
-| Grit and Grind | Blue-collar, uninsured/underinsured, ED entry, price-sensitive |
-
-No pre-set numbers. Agent derives all demographics and payer data from live Census + web research.
+| `server.js` | Express backend, 9 tool executors, SSE streaming, flattened Distance Matrix, truncation limit 50K |
+| `system-prompt.txt` | 35K char system prompt, 7 workflows, city adjacency map, payer targeting rule |
+| `public/index.html` | Chat UI, SSE streaming, markdown rendering, cache-clear-on-refresh |
+| `.env` | 7 API keys — never commit |
+| `CLAUDE.md` | Claude Code context file |
+| `MRA-CAPABILITIES.md` | Handoff doc for Marketing Plan GPT |
+| `HANDOFF.md` | This file |
+| `bh-mra-v1.1-workflow.json` | Old n8n workflow (backup, not active) |
+| `package.json` | Dependencies: express, dotenv, @anthropic-ai/sdk |
 
 ---
 
-## Cost Optimization Summary
+## API Keys Required (.env)
 
-| Optimization | Savings |
-|---|---|
-| System prompt trim (-2,000 tokens) | ~$0.03/query |
-| Local knowledge base (definitional questions) | ~30% of queries free |
-| Response cache (repeat queries) | ~30% cache hit rate |
-| Request dedup + debounce | Prevents waste |
-| Conversation memory (follow-ups reuse prior tool results) | ~$0.07/follow-up |
-| **Estimated total** | **~60% cost reduction** |
+| Key | Service | Used By |
+|---|---|---|
+| `ANTHROPIC_API_KEY` | Claude Sonnet (agent brain) | server.js |
+| `YEXT_API_KEY` | BH facilities + physicians | Tools 1, 9 |
+| `CENSUS_API_KEY` | US Census ACS 5-Year | Tool 2 |
+| `OPENAI_API_KEY` | gpt-4o web search | Tool 3 |
+| `GOOGLE_MAPS_API_KEY` | Geocode, Distance Matrix, Places | Tools 4, 5, 6 |
+| `OUTSCRAPER_API_KEY` | Google Reviews deep pull | Tool 7 |
+| `ORS_API_KEY` | OpenRouteService isochrones | Tool 8 |
 
 ---
 
-## Known Issues / Next Steps
+## Estimated Cost Per Marketing Plan
 
-- **Physician Lookup:** Node added but Yext `healthcareProfessional` entity type needs verification. Test the API to confirm BH has physician data and which fields are populated
-- **Drive Time Isochrone:** Uses wrong credential (Outscraper instead of OpenRouteService). Fix in n8n UI after import — swap to ORS credential
-- **Segment psychographics:** Each segment needs Census proxy variable definitions (what to look for) so the agent knows how to score them from data. Currently thematic only
-- **Yext client-side filtering:** Locations are pre-loaded on app startup but not yet used for client-side answering. Could eliminate more agent calls for simple "where is BH X?" queries
-- **Replit deployment:** Server listens on `0.0.0.0:5000`. Replit should work out of the box with `npm start`
-- **Anthropic prompt caching:** n8n's lmChatAnthropic node (v1.3) doesn't support it natively. Consider Autocache proxy or wait for n8n update
+A full marketing plan build typically requires 6-10 MRA queries across different data types. Here's the cost breakdown:
+
+### API Costs Per Query Type
+
+| Query Type | APIs Called | Est. Cost Per Query | Typical Calls Per Plan |
+|---|---|---|---|
+| Demographics / Payer Mix | Anthropic + Census (free) | $0.08–0.15 | 1-2 |
+| BH Location Inventory | Anthropic + Yext (free) + Google Distance Matrix | $0.10–0.20 | 1-2 |
+| BH Physician Inventory | Anthropic + Yext (free) + Google Distance Matrix | $0.12–0.25 | 1-2 |
+| Competitor Landscape | Anthropic + Google Places | $0.08–0.15 | 1-2 |
+| Reviews Deep Dive | Anthropic + Outscraper | $0.15–0.50 | 0-1 |
+| Drive Time Isochrone | Anthropic + ORS (free tier) | $0.05–0.10 | 0-1 |
+| Web Research | Anthropic + OpenAI | $0.10–0.20 | 1-2 |
+| Psychographic Profiling | Anthropic + Census (free) + OpenAI | $0.12–0.20 | 0-1 |
+
+### Cost Per API
+
+| API | Pricing Model | Est. Cost Per Plan |
+|---|---|---|
+| **Anthropic (Claude Sonnet)** | $3/M input, $15/M output tokens | $0.60–1.50 |
+| **Yext** | Free (Live API, existing BH account) | $0.00 |
+| **Census** | Free (government API) | $0.00 |
+| **Google Maps Platform** | Geocoding $5/1K, Distance Matrix $5/1K elements, Places $17/1K | $0.10–0.30 |
+| **OpenAI (gpt-4o)** | $2.50/M input, $10/M output | $0.05–0.15 |
+| **Outscraper** | $2/1K reviews | $0.04–0.20 |
+| **OpenRouteService** | Free tier (500 req/day) | $0.00 |
+
+### Total Estimated Cost Per Marketing Plan
+
+| Scenario | Queries | Est. Total Cost |
+|---|---|---|
+| **Light plan** (demographics + locations + competitors) | 3-4 queries | **$0.50–1.00** |
+| **Standard plan** (all data types, no reviews) | 6-8 queries | **$1.00–2.50** |
+| **Deep plan** (all data types + reviews + isochrones) | 8-12 queries | **$2.00–4.00** |
+
+**Monthly estimate:** 10 plans/month × $2.50 avg = **~$25/month** in API costs.
+
+**Comparison to n8n:** n8n added $24-50/month subscription cost on top of API costs. Now eliminated.
+
+---
+
+## 12 BH Consumer Segments
+
+| Segment | Who They Are | Marketing Target? |
+|---|---|---|
+| Stable and Seeking Care | Largest, highest commercial, Primary Care entry | **YES** |
+| Pinterest and Planning | Younger women, commercial, health-conscious, digital-first | **YES** |
+| Brickell Briefcase | Urban professionals 25-40, employer insurance, convenience-driven | **YES** |
+| Empty Nests, Full Pockets | Affluent seniors, active, musculoskeletal, high digital | **YES** |
+| Settling Down | Young married men, need PCP, partner-influenced | **YES** |
+| Snowbird Circuit | Seasonal affluent 60+, concierge demand | **YES** |
+| Mi Familia Primero | Hispanic/Latino multigenerational, bilingual, community trust | Operational |
+| Babies and Bills | Young women, Medicaid, high maternity | Operational |
+| Weekend Warriors | Single men, Medicaid, ED entry, trauma | Operational |
+| One Day at a Time | Middle-age, metabolic syndrome, high clinical need | Operational |
+| Senior Discounts | Older Medicare, highest chronic burden | Operational |
+| Grit and Grind | Blue-collar, uninsured, ED entry, price-sensitive | Operational |
+
+---
+
+## Verified Test Results (April 20, 2026)
+
+| Test | Result | Key Validation |
+|---|---|---|
+| Mile-based radius | ✅ PASS | 2 locations within 5 mi, correct distances |
+| Physician by specialty | ✅ PASS | 11 ortho at Miami Gardens (8.4 mi), all 9 cities searched |
+| Demographics | ✅ PASS | Correct percentages, 6 sections, commercially addressable pop |
+| Context-aware (overlap/feeder) | ✅ PASS | Correct geocoding, accurate drive times, proper classification |
+| Deployed (Replit) | ✅ PASS | Same results as localhost |
+
+---
+
+## Known Limitations
+
+- Sonnet sometimes includes locations slightly outside stated radius
+- Physician search depends on city adjacency map — unlisted cities use model's geographic knowledge
+- No ZIP filter for physicians — use city + drive time
+- Sub-specialty physicians (Breast, Maternal-Fetal, etc.) not in Yext
+- Model is claude-sonnet-4-20250514 (deprecated EOL June 15, 2026)
+- Client-side Yext pre-load exposes API key in browser (needs proxy)
 
 ---
 
 ## To Continue
 
 1. Open Claude Code from `~/Desktop/Claude/MRA-v1.1-UI/`
-2. Say "continue the build" or reference this handoff
-3. n8n JSON is at `bh-mra-v1.1-workflow.json` in this folder — upload to n8n after changes
-4. App runs with `npm start` → http://localhost:5000
+2. `CLAUDE.md` provides full context automatically
+3. `node server.js` → http://localhost:5000
+4. Refresh browser between tests to clear cache
