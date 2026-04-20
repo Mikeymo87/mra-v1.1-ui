@@ -224,8 +224,10 @@
 </div>
 
 <script>
-  const N8N_WEBHOOK = 'https://michaelmora.app.n8n.cloud/webhook/market-research';
+  const API_ENDPOINT = '/api/chat'; // v2: direct Anthropic, no n8n
   const SESSION_ID  = 'mra-' + Date.now() + '-' + Math.random().toString(36).slice(2,8);
+  // Clear response cache on page load so refresh = fresh start
+  sessionStorage.removeItem('mra_cache');
 
   const messagesEl = document.getElementById('messages');
   const queryInput = document.getElementById('queryInput');
@@ -275,6 +277,9 @@
       this._writeStore(store);
     }
   };
+
+  // ── 1b. Response History (for client-side merge/combine) ────────────────
+  const responseHistory = []; // {query, markdown, ts}
 
   // ── 2. Request Deduplication ──────────────────────────────────────────────
   const inflightRequests = new Map(); // normalized query -> Promise
@@ -465,13 +470,38 @@
       return;
     }
 
-    // Step 1.5: Check local knowledge base
+    // Step 1.5a: Check for merge/combine request
+    const mergeTargets = detectMergeRequest(query);
+    if (mergeTargets) {
+      console.log('[MRA] Merge request detected:', mergeTargets.length, 'responses');
+      // Rewrite the query to include previous response data, then send to agent
+      const mergePrompt = mergeResponses(mergeTargets, query);
+      const thinkingId = addThinking();
+      setStatus('busy', 'Merging responses...');
+      sendBtn.disabled = true;
+      try {
+        const responseText = await streamChat(mergePrompt, thinkingId);
+        responseHistory.push({ query, markdown: responseText, ts: Date.now() });
+        setStatus('ready', 'Ready');
+      } catch (err) {
+        removeEl(thinkingId);
+        addErrorMsg('Failed to merge responses. Try again or rephrase.');
+        setStatus('error', 'Error');
+      } finally {
+        sendBtn.disabled = false;
+        queryInput.focus();
+      }
+      return;
+    }
+
+    // Step 1.5b: Check local knowledge base
     const localAnswer = matchLocalKnowledge(query);
     if (localAnswer) {
       console.log('[MRA] Knowledge base hit for:', normalizedQuery);
       const annotated = localAnswer + '\n\n---\n*(answered from BH knowledge base)*';
       addAgentMsg(annotated);
       ResponseCache.set(query, annotated);
+      responseHistory.push({ query, markdown: annotated, ts: Date.now() });
       return;
     }
 
@@ -480,43 +510,38 @@
     sendBtn.disabled = true;
 
     try {
-      let responseText;
-
-      // Step 2: Check dedup — reuse in-flight promise if same query
+      // Step 2: Check dedup
       if (inflightRequests.has(normalizedQuery)) {
-        console.log('[MRA] Dedup: reusing in-flight request for:', normalizedQuery);
-        responseText = await inflightRequests.get(normalizedQuery);
-      } else {
-        // Step 3: Normal fetch
-        const fetchPromise = (async () => {
-          const res = await fetch(N8N_WEBHOOK, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query, session_id: SESSION_ID })
-          });
-          if (!res.ok) throw new Error(`Request failed: ${res.status}`);
-          const data = await res.json();
-          return data.response || 'No response returned.';
-        })();
-
-        inflightRequests.set(normalizedQuery, fetchPromise);
-
-        try {
-          responseText = await fetchPromise;
-        } finally {
-          inflightRequests.delete(normalizedQuery);
-        }
+        const responseText = await inflightRequests.get(normalizedQuery);
+        removeEl(thinkingId);
+        addAgentMsg(responseText);
+        ResponseCache.set(query, responseText);
+        responseHistory.push({ query, markdown: responseText, ts: Date.now() });
+        setStatus('ready', 'Ready');
+        sendBtn.disabled = false;
+        queryInput.focus();
+        return;
       }
 
-      removeEl(thinkingId);
-      addAgentMsg(responseText);
+      // Step 3: Enrich query + stream via SSE
+      const enrichedQuery = enrichQuery(query);
+      const streamPromise = streamChat(enrichedQuery, thinkingId);
+      inflightRequests.set(normalizedQuery, streamPromise);
 
-      // Step 4: Cache the response
+      let responseText;
+      try {
+        responseText = await streamPromise;
+      } finally {
+        inflightRequests.delete(normalizedQuery);
+      }
+
+      // Step 4: Cache + track
       ResponseCache.set(query, responseText);
-
+      responseHistory.push({ query, markdown: responseText, ts: Date.now() });
       setStatus('ready', 'Ready');
     } catch (err) {
       removeEl(thinkingId);
+      logFailure(query, err.message);
       addErrorMsg(err.message.includes('500')
         ? 'The agent hit an error. Try rephrasing or ask a simpler question.'
         : 'Something went wrong. Please try again.');
@@ -525,6 +550,121 @@
       sendBtn.disabled = false;
       queryInput.focus();
     }
+  }
+
+  // ── SSE Streaming Chat ────────────────────────────────────────────────────
+  async function streamChat(query, thinkingId) {
+    const res = await fetch(API_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query, session_id: SESSION_ID })
+    });
+
+    if (!res.ok) throw new Error(`Request failed: ${res.status}`);
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let markdown = '';
+    let bubbleEl = null;
+    let wrapEl = null;
+    let renderTimer = null;
+
+    function ensureBubble() {
+      if (bubbleEl) return;
+      removeEl(thinkingId);
+      wrapEl = mkWrap('agent');
+      const label = mkLabel('BH Market Research Agent');
+      bubbleEl = document.createElement('div');
+      bubbleEl.className = 'msg-bubble';
+      bubbleEl.innerHTML = '';
+      wrapEl.append(label, bubbleEl);
+      messagesEl.appendChild(wrapEl);
+    }
+
+    function renderMarkdown() {
+      if (!bubbleEl || !markdown) return;
+      bubbleEl.innerHTML = marked.parse(markdown);
+      bubbleEl.querySelectorAll('a').forEach(a => a.setAttribute('target', '_blank'));
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    function scheduleRender() {
+      if (renderTimer) return;
+      renderTimer = setTimeout(() => { renderTimer = null; renderMarkdown(); }, 80);
+    }
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      let eventType = '';
+      for (const line of lines) {
+        if (line.startsWith('event: ')) {
+          eventType = line.slice(7).trim();
+        } else if (line.startsWith('data: ')) {
+          const raw = line.slice(6);
+          let payload;
+          try { payload = JSON.parse(raw); } catch { continue; }
+
+          if (eventType === 'delta' && payload.text) {
+            ensureBubble();
+            markdown += payload.text;
+            scheduleRender();
+          } else if (eventType === 'status' && payload.message) {
+            const thinkEl = document.getElementById(thinkingId);
+            if (thinkEl) {
+              const span = thinkEl.querySelector('.thinking span');
+              if (span) span.textContent = payload.message;
+            }
+          } else if (eventType === 'done') {
+            if (payload.text) markdown = payload.text;
+          } else if (eventType === 'error') {
+            throw new Error(payload.message || 'Agent error');
+          }
+        }
+      }
+    }
+
+    // Final render
+    clearTimeout(renderTimer);
+    renderMarkdown();
+
+    // Add action buttons
+    if (wrapEl && markdown) {
+      const actions = document.createElement('div');
+      actions.className = 'msg-actions';
+
+      const copyBtn = document.createElement('button');
+      copyBtn.className = 'action-btn';
+      copyBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy';
+      copyBtn.addEventListener('click', () => {
+        navigator.clipboard.writeText(markdown).then(() => {
+          copyBtn.innerHTML = 'Copied';
+          copyBtn.classList.add('copied');
+          setTimeout(() => { copyBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy'; copyBtn.classList.remove('copied'); }, 2000);
+        });
+      });
+
+      const pdfBtn = document.createElement('button');
+      pdfBtn.className = 'action-btn';
+      pdfBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> PDF';
+      pdfBtn.addEventListener('click', () => downloadPDF(markdown));
+
+      const wordBtn = document.createElement('button');
+      wordBtn.className = 'action-btn';
+      wordBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> Word';
+      wordBtn.addEventListener('click', () => downloadWord(markdown));
+
+      actions.append(copyBtn, pdfBtn, wordBtn);
+      wrapEl.appendChild(actions);
+    }
+
+    return markdown;
   }
 
   // ── Messages ──────────────────────────────────────────────────────────────
@@ -591,6 +731,104 @@
     }
 
     return null; // Query is specific enough
+  }
+
+  // ── 6b. Merge/Combine Detection ──────────────────────────────────────────
+  function detectMergeRequest(query) {
+    const q = query.toLowerCase();
+    const isMerge = /\b(merge|combine|consolidate|put together|join|unif(y|ied)|stitch|concat|into one table|single table|one report)\b/i.test(q);
+    if (!isMerge || responseHistory.length < 2) return null;
+
+    // Determine how many responses to merge (default: last 2, or "all")
+    let count = 2;
+    const allMatch = /\b(all|every|everything)\b/i.test(q);
+    const numMatch = q.match(/\b(last\s+)?(\d+)\b/);
+    if (allMatch) count = responseHistory.length;
+    else if (numMatch) count = Math.min(parseInt(numMatch[2]), responseHistory.length);
+    count = Math.max(2, Math.min(count, responseHistory.length));
+
+    const toMerge = responseHistory.slice(-count);
+    return toMerge;
+  }
+
+  function mergeResponses(responses, query) {
+    const context = responses.map((r, i) =>
+      `--- PREVIOUS RESPONSE ${i + 1} (query: "${r.query}") ---\n${r.markdown}\n--- END RESPONSE ${i + 1} ---`
+    ).join('\n\n');
+
+    const mergePrompt = `The user wants to merge/combine the following ${responses.length} previous responses into one unified table or report. Do NOT call any tools. Just combine the data below into a single clean output.\n\nUser instruction: ${query}\n\n${context}`;
+    return mergePrompt;
+  }
+
+  // ── 7. Query Enrichment — smart packaging before sending to agent ────────
+  // Detects query intent and adds explicit routing/scope instructions so the
+  // agent doesn't over-fetch tools or misinterpret scope.
+
+  const _failureLog = []; // Track failed queries to learn from them
+
+  function enrichQuery(rawQuery) {
+    const q = rawQuery.toLowerCase().trim();
+    const zips = rawQuery.match(/\b\d{5}\b/g);
+    const hasZips = zips && zips.length > 0;
+
+    // ── Demographics-only detection ──
+    const isDemoOnly = hasZips && (
+      /\b(age|sex|gender|male|female|demographic|population|income|median|household|payer mix|insurance|census)\b/i.test(q)
+    );
+    const wantsLocations = /\b(location|facility|hospital|urgent|primary care|where|find bh|baptist health.*near)\b/i.test(q);
+    const wantsCompetitors = /\b(competitor|competition|rival|who else|hca|jackson|cleveland clinic|mount sinai)\b/i.test(q);
+
+    if (isDemoOnly && !wantsLocations && !wantsCompetitors) {
+      // Pure demographics request — add explicit scope instruction
+      const zipList = zips.join(', ');
+      let enriched = rawQuery;
+
+      // Detect specific demo type
+      if (/\b(age|male|female|sex|gender)\b/i.test(q) && !/\b(income|payer|insurance)\b/i.test(q)) {
+        enriched = `[DEMOGRAPHICS ONLY — Census tool only, no locations/competitors] Age and sex breakdown for ZIP codes ${zipList}. Use B01001 detailed table split into 2 calls (male ages + female ages). Present as table: Age Group | Male | Female | Total | % of Pop. ${rawQuery}`;
+      } else if (/\b(payer|insurance)\b/i.test(q)) {
+        enriched = `[DEMOGRAPHICS ONLY — Census tool only, no locations/competitors] Payer mix for ZIP codes ${zipList}. Follow the Payer Mix Workflow (2 calls: DP03 + S2704). ${rawQuery}`;
+      } else if (/\b(income|median|household)\b/i.test(q)) {
+        enriched = `[DEMOGRAPHICS ONLY — Census tool only, no locations/competitors] Income and economic profile for ZIP codes ${zipList}. ${rawQuery}`;
+      } else {
+        enriched = `[DEMOGRAPHICS ONLY — Census tool only, no locations/competitors] Demographic profile for ZIP codes ${zipList}. ${rawQuery}`;
+      }
+
+      console.log('[MRA] Query enriched (demo-only):', enriched.substring(0, 120) + '...');
+      return enriched;
+    }
+
+    // ── Location-only detection ──
+    if (wantsLocations && !wantsCompetitors && !isDemoOnly) {
+      console.log('[MRA] Query type: location lookup');
+      return rawQuery; // routing table handles this well already
+    }
+
+    // ── Competitor-only detection ──
+    if (wantsCompetitors && !wantsLocations && !isDemoOnly) {
+      console.log('[MRA] Query type: competitor lookup');
+      return rawQuery;
+    }
+
+    // ── Previous failure recovery ──
+    const recentFailures = _failureLog.filter(f => Date.now() - f.ts < 300000); // last 5 min
+    const censusFailed = recentFailures.some(f => f.type === 'census');
+    if (censusFailed && isDemoOnly) {
+      // Census recently failed — add fallback year instruction
+      return `[IMPORTANT: Census API may be down. Try 2023 data if 2024 fails.] ${rawQuery}`;
+    }
+
+    return rawQuery;
+  }
+
+  function logFailure(query, errorMsg) {
+    const type = /census|demographic|age|income|payer/i.test(query) ? 'census'
+               : /yext|location|facility/i.test(errorMsg) ? 'yext'
+               : 'other';
+    _failureLog.push({ query, error: errorMsg, type, ts: Date.now() });
+    // Keep only last 20
+    if (_failureLog.length > 20) _failureLog.splice(0, _failureLog.length - 20);
+    console.log('[MRA] Failure logged:', type, errorMsg.substring(0, 80));
   }
 
   function addClarificationMsg(originalQuery, config) {
