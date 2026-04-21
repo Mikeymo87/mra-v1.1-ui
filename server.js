@@ -188,6 +188,18 @@ const tools = [
       },
       required: ['zip_codes']
     }
+  },
+  {
+    name: 'one_medical_location_lookup',
+    description: 'Looks up One Medical (Amazon) primary care clinic locations in South Florida. Returns name, address, coordinates, and partnership details with Baptist Health. One Medical is a BH strategic referral partner — they handle primary care and refer specialty/hospital services to Baptist Health (EHR integrated). 7 clinics across Miami-Dade and Broward. Use to cross-reference with BH facilities for referral corridor and drive-time analysis. Coordinates included for direct use with calculate_drive_times.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        city: { type: 'string', description: 'Filter by city name (e.g. "Doral", "Fort Lauderdale"). Optional — omit to get all locations.' },
+        county: { type: 'string', description: 'Filter by county (e.g. "Miami-Dade", "Broward"). Optional.' }
+      },
+      required: []
+    }
   }
 ];
 
@@ -199,6 +211,16 @@ try {
   console.log(`  CDC PLACES: ${Object.keys(cdcPlacesData).length} ZIPs loaded`);
 } catch (err) {
   console.warn('  CDC PLACES: data file not found — cdc_health_behaviors tool will return empty results');
+}
+
+// ── Load One Medical locations ─────────────────────────────────────────────
+const ONE_MEDICAL_PATH = path.join(__dirname, 'data', 'one-medical-locations.json');
+let oneMedicalData = { locations: [], partnership: {} };
+try {
+  oneMedicalData = JSON.parse(fs.readFileSync(ONE_MEDICAL_PATH, 'utf8'));
+  console.log(`  One Medical: ${oneMedicalData.locations.length} locations loaded`);
+} catch (err) {
+  console.warn('  One Medical: data file not found — one_medical_location_lookup tool will return empty results');
 }
 
 // ── Tool Executors ──────────────────────────────────────────────────────────
@@ -438,6 +460,17 @@ async function executeTool(name, input) {
           }
         }
         return cite('CDC PLACES 2025 (local data, BRFSS 2023)', 'cdc-places-south-florida.json', timestamp, results);
+      }
+
+      case 'one_medical_location_lookup': {
+        let results = oneMedicalData.locations.filter(l => l.status === 'open');
+        if (input.city) results = results.filter(l => l.city.toLowerCase().includes(input.city.toLowerCase()));
+        if (input.county) results = results.filter(l => l.county.toLowerCase().includes(input.county.toLowerCase()));
+        return cite('One Medical Locations (local data)', 'one-medical-locations.json', timestamp, {
+          locations: results,
+          total: results.length,
+          partnership: oneMedicalData.partnership
+        });
       }
 
       default:

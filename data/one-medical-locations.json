@@ -1,0 +1,123 @@
+{
+  "locations": [
+    {
+      "id": "om-doral",
+      "name": "One Medical — Doral Square",
+      "address": "8700 NW 36th St, Suite 107",
+      "city": "Doral",
+      "state": "FL",
+      "zip": "33178",
+      "county": "Miami-Dade",
+      "lat": 25.8126,
+      "lng": -80.3568,
+      "phone": "888-663-6331",
+      "type": "Primary Care",
+      "status": "open",
+      "opened": "2022"
+    },
+    {
+      "id": "om-brickell",
+      "name": "One Medical — Brickell",
+      "address": "82 SW 8th St",
+      "city": "Miami",
+      "state": "FL",
+      "zip": "33130",
+      "county": "Miami-Dade",
+      "lat": 25.7688,
+      "lng": -80.1956,
+      "phone": "833-823-5560",
+      "type": "Primary Care",
+      "status": "open",
+      "opened": "2022"
+    },
+    {
+      "id": "om-aventura",
+      "name": "One Medical — Esplanade at Aventura",
+      "address": "19505 Biscayne Blvd, Suite 2180",
+      "city": "Aventura",
+      "state": "FL",
+      "zip": "33180",
+      "county": "Miami-Dade",
+      "lat": 25.9565,
+      "lng": -80.1423,
+      "phone": "888-663-6331",
+      "type": "Primary Care",
+      "status": "open",
+      "opened": "2022"
+    },
+    {
+      "id": "om-coconut-grove",
+      "name": "One Medical — Coconut Grove",
+      "address": "2984 Grand Ave",
+      "city": "Miami",
+      "state": "FL",
+      "zip": "33133",
+      "county": "Miami-Dade",
+      "lat": 25.7272,
+      "lng": -80.2421,
+      "phone": "833-823-5560",
+      "type": "Primary Care",
+      "status": "open",
+      "opened": "2022"
+    },
+    {
+      "id": "om-dadeland",
+      "name": "One Medical — Dadeland",
+      "address": "8810 SW 72nd Ct, Suite A-101",
+      "city": "Miami",
+      "state": "FL",
+      "zip": "33156",
+      "county": "Miami-Dade",
+      "lat": 25.6912,
+      "lng": -80.3140,
+      "phone": "888-663-6331",
+      "type": "Primary Care",
+      "status": "open",
+      "opened": "2022"
+    },
+    {
+      "id": "om-pembroke-gardens",
+      "name": "One Medical — Shops at Pembroke Gardens",
+      "address": "309 SW 145th Terrace",
+      "city": "Pembroke Pines",
+      "state": "FL",
+      "zip": "33027",
+      "county": "Broward",
+      "lat": 26.0017,
+      "lng": -80.3411,
+      "phone": "888-663-6331",
+      "type": "Primary Care",
+      "status": "open",
+      "opened": "2022"
+    },
+    {
+      "id": "om-las-olas",
+      "name": "One Medical — Las Olas",
+      "address": "450 E Las Olas Blvd, Suite 130",
+      "city": "Fort Lauderdale",
+      "state": "FL",
+      "zip": "33301",
+      "county": "Broward",
+      "lat": 26.1185,
+      "lng": -80.1373,
+      "phone": "833-823-5560",
+      "type": "Primary Care",
+      "status": "open",
+      "opened": "2022"
+    }
+  ],
+  "partnership": {
+    "partner": "Baptist Health South Florida",
+    "model": "One Medical handles primary care; refers specialty and hospital services to Baptist Health. EHR integrated.",
+    "co_branding": "One Medical in collaboration with Baptist Health — separate identities, cross-promoted on each other's websites",
+    "prior_partner": "UHealth (University of Miami Health System)",
+    "active_since": "2021-04",
+    "clinics_open_since": "late 2022",
+    "note": "BH replacing UHealth as specialty referral destination — same model, different health system partner. 900+ referrals by early 2023 under UHealth model."
+  },
+  "_meta": {
+    "last_updated": "2026-04-21",
+    "coverage": "Miami-Dade (5 locations), Broward (2 locations). No Palm Beach or Monroe county locations as of April 2026.",
+    "source": "onemedical.com/locations/mia/, Yelp, web research"
+  }
+}
