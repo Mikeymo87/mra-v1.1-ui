@@ -31,6 +31,40 @@ Browser (localhost:5000 / Replit)
 
 ---
 
+## What Changed — v2.1.2 (April 20, 2026)
+
+### CDC PLACES Integration — Tool #10 (cdc_health_behaviors)
+- **What:** Added 33 real health behavior measures at ZIP level for 195 South Florida ZIPs (all 4 counties: Miami-Dade ~78, Broward ~51, Palm Beach ~57, Monroe ~9)
+- **Data source:** CDC PLACES 2025 release (BRFSS 2023 survey data). Stored locally as `data/cdc-places-south-florida.json` (756KB).
+- **Measures include:** Obesity, smoking, physical inactivity, depression, preventive care visits, dental visits, binge drinking, short sleep, chronic diseases (diabetes, heart disease, COPD), uninsured rate, mammography, colon screening, cholesterol screening, disabilities, mental health distress
+- **How it's used:** Fires alongside Census for any psychographic/segment analysis. Provides BEHAVIORAL EVIDENCE for segment scoring instead of demographic guesswork.
+- **Zero latency:** Local JSON lookup, no API call.
+
+### Enhanced Psychographic Profiling (system-prompt.txt)
+- **3-layer approach:** Census proxy variables + CDC health behaviors + Esri Tapestry (web research)
+- **Expanded Census variables:** Added work-from-home, public transit, married-with-kids, no vehicle, $200K+ households, labor force participation, graduate degrees
+- **Segment-to-behavior mapping:** Each of 12 BH segments now has CDC measure indicators (e.g., "Stable and Seeking Care" = high CHECKUP >75% + high CHOLSCREEN + low LPA)
+- **Output format:** 3 tables (Census indicators, Health Behaviors, Segment Scores with evidence)
+
+---
+
+## What Changed — v2.1.1 (April 20, 2026)
+
+### Token Optimization: Session History Compression
+- **Problem:** Raw tool results (20K+ chars of Census JSON, Yext arrays) were persisting in `session.messages` at full size. Every subsequent query re-read all prior tool results, causing token bloat: query #5 could be reading 100K+ chars of stale data.
+- **Fix:** Added `compressToolResult()` function in server.js. After the agent finishes processing a query, raw tool results in session history are replaced with compact summaries (~2K chars): tool name, record count, sample of first 3 records, and a note that full data was processed in prior turn.
+- **How it works:** During the current iteration, the agent still receives FULL tool results (no accuracy loss). Only AFTER the response is complete do we compress the history entries. Subsequent queries see summaries instead of raw JSON.
+- **Impact:** ~60-70% reduction in session token growth. Query #10 in a session goes from ~350K input tokens to ~80K.
+- **Important:** The agent sees `_compressed: true` flag in historical tool results. It knows these are summaries and should not attempt to extract data from them for the current query — it should make fresh tool calls.
+
+### Plan Mode → Marketing Planner Mode (system-prompt.txt)
+- **Problem:** Old "Plan Mode" capped tool calls at 1. This broke demographics (needs 3-4 Census calls) and produced incomplete data when triggered by natural phrases like "for Section 5."
+- **Fix:** Renamed to "Marketing Planner Mode." Removed artificial 1-call cap. The agent now uses analyst judgment — makes as many tool calls as accuracy requires. Output is structured for plan consumption (tables over prose, strategic headlines first, operational context second) but not artificially shortened.
+- **Trigger phrases:** "for the marketing plan," "plan mode," "for Section 4/5," "marketing plan section," "plan brief," "for the plan"
+- **Philosophy:** The MRA is the expert analyst. It decides what data tells the story. The Marketing Planner gives context (what section, what the user said), the MRA delivers what's needed — full data, full tables, organized for plan use.
+
+---
+
 ## What Changed — v2.1 (April 20, 2026)
 
 ### Data Accuracy Fixes

@@ -1,7 +1,7 @@
 # BH Market Research Agent — Capabilities & Prompt Reference
 
 ## What It Is
-A Claude Sonnet-powered research agent with 9 live API tools. It answers data questions about Baptist Health South Florida's market — demographics, locations, physicians, competitors, reviews, and drive times. It does NOT make strategic recommendations. It reports verified data.
+A Claude Sonnet-powered research agent with 10 tools (9 live APIs + 1 local dataset). It answers data questions about Baptist Health South Florida's market — demographics, psychographics, health behaviors, locations, physicians, competitors, reviews, and drive times. It does NOT make strategic recommendations. It reports verified data.
 
 **Endpoint:** `POST /api/chat` (SSE streaming) or `POST /webhook/market-research` (JSON)
 
@@ -72,6 +72,19 @@ A Claude Sonnet-powered research agent with 9 live API tools. It answers data qu
 - **What:** GeoJSON drive-time polygons (5, 10, 15, 20 min rings)
 - **Format:** Coordinates are [longitude, latitude]
 - **Max:** 3 ranges per call
+
+### 10. CDC Health Behaviors (Local Data — CDC PLACES 2025)
+- **What:** 33 health behavior and lifestyle measures per ZIP code. Real behavioral data from BRFSS surveys.
+- **Coverage:** 195 ZIPs across Miami-Dade (~78), Broward (~51), Palm Beach (~57), Monroe (~9)
+- **Key measures:**
+  - Healthcare engagement: Annual checkup, dental visit, cholesterol screening, mammography, colon screening
+  - Lifestyle behaviors: Physical inactivity, obesity, smoking, binge drinking, short sleep
+  - Mental health: Depression diagnosis, frequent mental health distress
+  - Chronic disease prevalence: Diabetes, high blood pressure, high cholesterol, heart disease, COPD, stroke, cancer
+  - Access: Uninsured rate (18-64)
+  - Disabilities: Mobility, cognitive, self-care, independent living
+- **Latency:** Zero (local JSON file, no API call)
+- **Use with:** Census demographics to build complete psychographic profiles. CDC provides behavioral evidence; Census provides demographic context. Together they enable accurate BH audience segment scoring.
 
 ---
 

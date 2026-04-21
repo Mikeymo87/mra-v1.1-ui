@@ -174,10 +174,34 @@ const tools = [
       },
       required: ['filter']
     }
+  },
+  {
+    name: 'cdc_health_behaviors',
+    description: 'Looks up CDC PLACES health behavior and lifestyle data for South Florida ZIP codes. Returns 33 measures per ZIP including: obesity, smoking, physical inactivity, depression, preventive care visits, dental visits, binge drinking, chronic diseases (diabetes, heart disease, COPD, cancer), sleep, disabilities, and mental/physical health days. Data is from 2025 PLACES release (2023 BRFSS data). Coverage: 195 ZIPs across Miami-Dade, Broward, Palm Beach, and Monroe counties. Use this tool ALONGSIDE Census demographics to build richer psychographic profiles — it provides actual BEHAVIORAL data, not just demographic proxies.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        zip_codes: {
+          type: 'string',
+          description: 'Comma-separated ZIP codes to look up. Example: "33027,33028,33025". Returns health behavior data for each ZIP found in the database.'
+        }
+      },
+      required: ['zip_codes']
+    }
   }
 ];
 
-// ── Tool Executors ──────────────���───────────────────────────────────────────
+// ── Load CDC PLACES data ────────────────────────────────────────────────────
+const CDC_PLACES_PATH = path.join(__dirname, 'data', 'cdc-places-south-florida.json');
+let cdcPlacesData = {};
+try {
+  cdcPlacesData = JSON.parse(fs.readFileSync(CDC_PLACES_PATH, 'utf8'));
+  console.log(`  CDC PLACES: ${Object.keys(cdcPlacesData).length} ZIPs loaded`);
+} catch (err) {
+  console.warn('  CDC PLACES: data file not found — cdc_health_behaviors tool will return empty results');
+}
+
+// ── Tool Executors ──────────────────────────────────────────────────────────
 
 async function fetchWithTimeout(url, options = {}, timeoutMs = 30000) {
   const controller = new AbortController();
@@ -194,6 +218,72 @@ function truncateResult(data, maxChars = 50000) {
   const str = typeof data === 'string' ? data : JSON.stringify(data);
   if (str.length <= maxChars) return data;
   return str.substring(0, maxChars) + '\n\n[... truncated — ' + str.length + ' total chars]';
+}
+
+// Compress tool results for session history to prevent token bloat.
+// The agent gets full data during the current iteration but subsequent queries
+// only see a compact summary (tool name, record count, key fields).
+function compressToolResult(toolName, fullContent) {
+  const MAX_SUMMARY = 2000; // chars — enough context for follow-ups without full JSON
+  try {
+    const parsed = JSON.parse(fullContent);
+    const data = parsed.data || parsed;
+
+    // For arrays (Yext results, Distance Matrix, Census), summarize count + first few items
+    if (Array.isArray(data)) {
+      const summary = {
+        _compressed: true,
+        tool: toolName,
+        total_records: data.length,
+        sample: data.slice(0, 3),
+        note: `Full data had ${data.length} records. This is a compressed summary for session context.`
+      };
+      return JSON.stringify(summary).substring(0, MAX_SUMMARY);
+    }
+
+    // For objects with nested data arrays
+    if (data && typeof data === 'object') {
+      const keys = Object.keys(data);
+      // If it has an error, keep it small
+      if (data.error) return JSON.stringify({ _compressed: true, tool: toolName, error: data.error });
+      // Census returns arrays of arrays
+      if (Array.isArray(data[keys[0]])) {
+        const summary = {
+          _compressed: true,
+          tool: toolName,
+          total_rows: data.length || keys.length,
+          fields: Array.isArray(data[0]) ? data[0] : keys.slice(0, 10),
+          row_count: Array.isArray(data) ? data.length : 'object',
+          note: 'Compressed summary. Full data was processed in prior turn.'
+        };
+        return JSON.stringify(summary).substring(0, MAX_SUMMARY);
+      }
+      // Generic object — keep source metadata + truncated preview
+      const summary = {
+        _compressed: true,
+        tool: toolName,
+        source: parsed._source || null,
+        keys: keys.slice(0, 10),
+        preview: JSON.stringify(data).substring(0, 500),
+        note: 'Compressed summary. Full data was processed in prior turn.'
+      };
+      return JSON.stringify(summary).substring(0, MAX_SUMMARY);
+    }
+
+    // Strings (web research results) — keep first 1500 chars
+    if (typeof data === 'string') {
+      return JSON.stringify({
+        _compressed: true,
+        tool: toolName,
+        preview: data.substring(0, 1500),
+        full_length: data.length,
+        note: 'Compressed. Full text was processed in prior turn.'
+      });
+    }
+  } catch (e) {
+    // If parsing fails, just truncate hard
+  }
+  return fullContent.substring(0, MAX_SUMMARY);
 }
 
 async function executeTool(name, input) {
@@ -337,6 +427,19 @@ async function executeTool(name, input) {
         return cite('Yext Live API (Physicians)', source, timestamp, data.response?.entities || data);
       }
 
+      case 'cdc_health_behaviors': {
+        const zips = input.zip_codes.split(',').map(z => z.trim());
+        const results = {};
+        for (const zip of zips) {
+          if (cdcPlacesData[zip]) {
+            results[zip] = cdcPlacesData[zip];
+          } else {
+            results[zip] = { error: `No CDC PLACES data for ZIP ${zip}. Coverage: 195 South Florida ZIPs (Miami-Dade, Broward, Palm Beach, Monroe).` };
+          }
+        }
+        return cite('CDC PLACES 2025 (local data, BRFSS 2023)', 'cdc-places-south-florida.json', timestamp, results);
+      }
+
       default:
         return { error: `Unknown tool: ${name}` };
     }
@@ -420,25 +523,57 @@ async function runAgentLoop(sessionId, userMessage, res) {
 
     // Execute tool calls
     const toolResults = [];
+    const toolSummaries = [];
     for (const toolCall of toolCalls) {
       sendSSE(res, 'status', { message: `Calling ${toolCall.name.replace(/_/g, ' ')}...` });
       console.log(`[Agent] Tool call: ${toolCall.name}`, JSON.stringify(toolCall.input).substring(0, 200));
 
       const result = await executeTool(toolCall.name, toolCall.input);
+      const fullContent = JSON.stringify(result);
       toolResults.push({
         type: 'tool_result',
         tool_use_id: toolCall.id,
-        content: JSON.stringify(result)
+        content: fullContent
+      });
+      // Store compressed summary for session history (saves tokens on subsequent queries)
+      toolSummaries.push({
+        type: 'tool_result',
+        tool_use_id: toolCall.id,
+        content: compressToolResult(toolCall.name, fullContent)
       });
     }
 
-    // Append tool results to session
+    // Send full results for THIS iteration (agent needs complete data to reason)
     session.messages.push({ role: 'user', content: toolResults });
+
+    // After agent processes results, replace with compressed version in history
+    // (only compress after the final iteration — during tool loops, keep full data)
+    if (iterations > 0) {
+      session._pendingCompression = session._pendingCompression || [];
+      session._pendingCompression.push({
+        index: session.messages.length - 1,
+        compressed: toolSummaries
+      });
+    }
   }
 
   if (iterations >= MAX_ITERATIONS) {
     sendSSE(res, 'delta', { text: '\n\n*[Max iterations reached. Some data may be incomplete.]*' });
     fullText += '\n\n*[Max iterations reached. Some data may be incomplete.]*';
+  }
+
+  // Compress tool results in session history now that the agent is done.
+  // This replaces raw JSON (20K+ chars) with compact summaries (2K chars)
+  // so subsequent queries don't re-read massive payloads.
+  if (session._pendingCompression) {
+    const count = session._pendingCompression.length;
+    for (const { index, compressed } of session._pendingCompression) {
+      if (session.messages[index] && session.messages[index].role === 'user') {
+        session.messages[index].content = compressed;
+      }
+    }
+    delete session._pendingCompression;
+    console.log(`[Session] Compressed ${count} tool result set(s) in session history`);
   }
 
   trimSession(session);
