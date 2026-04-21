@@ -521,7 +521,7 @@ async function runAgentLoop(sessionId, userMessage, res) {
     iterations++;
 
     const stream = anthropic.messages.stream({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-4-6',
       max_tokens: 4096,
       system: SYSTEM_PROMPT,
       messages: session.messages,
@@ -661,7 +661,7 @@ app.post('/webhook/market-research', async (req, res) => {
     while (iterations < MAX_ITERATIONS) {
       iterations++;
       const response = await anthropic.messages.create({
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-sonnet-4-6',
         max_tokens: 4096,
         system: SYSTEM_PROMPT,
         messages: session.messages,
