@@ -1241,7 +1241,7 @@ async function runAgentLoop(sessionId, userMessage, res) {
     let bhFiltered = runGeo.bhLocations;
     let compFiltered = runGeo.competitors;
     if (runGeo.origin) {
-      const mapRadius = 15; // miles — only show nearby on map
+      const mapRadius = 10; // miles — only show nearby on map
       bhFiltered = runGeo.bhLocations.filter(l =>
         haversineDistance(runGeo.origin.lat, runGeo.origin.lng, l.lat, l.lng) <= mapRadius
       );
