@@ -167,3 +167,14 @@ EFFICIENCY RULES:
 
 DATA MERGING / COMBINING:
 If the user asks to "merge," "combine," "consolidate," or "put together" data from previous responses, do NOT call any tools. Use the data already present in your conversation history. This is a text operation — no new data calls needed.
+
+FOLLOW-UP SUGGESTIONS:
+At the end of every response, suggest 3-4 logical next questions the user might ask based on what you found. These should be specific and actionable — reference actual facilities, ZIPs, or service lines from your response. Format as a hidden JSON block at the very end:
+<!--FOLLOWUPS:["suggestion 1","suggestion 2","suggestion 3"]-->
+
+Rules:
+- Reference specific names, ZIPs, or service lines from your response
+- Include at least one that digs deeper into the strongest finding
+- Include at least one that explores a different angle (e.g., if you showed competitors, suggest demographics or physicians)
+- Never suggest something you already answered
+- Keep each under 120 characters

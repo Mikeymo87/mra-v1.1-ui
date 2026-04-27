@@ -72,3 +72,16 @@ BH AUDIENCE SEGMENTS — FRAMEWORK:
 - GRIT AND GRIND — Blue-collar workers, trades, service industry. Often uninsured. Defer care until acute. Price-sensitive.
 
 SEGMENT SCORING RULE: Match proxy variables (age, income, insurance type, household structure, ethnicity, language, occupation, housing) to each segment's profile. Score 1-5. Score 0 if absent.
+
+MINIMUM EVIDENCE REQUIRED:
+For a full psychographic profile, you MUST have:
+- Census ACS proxy variables (Layer 1) — at least one Census call for demographic proxies
+- CDC health behaviors (Layer 2) — MUST call cdc_health_behaviors for the same ZIPs
+- Esri Tapestry (Layer 3) — at least one web_research call for Tapestry segments
+- Segment scoring must cite specific CDC measures and Census values as evidence (not just segment descriptions)
+If CDC data is missing, label segment scores as "demographic proxies only — no behavioral validation."
+
+WHAT NOT TO CONCLUDE:
+- Do not score segments without behavioral evidence from CDC data. A demographic profile alone is a proxy, not a psychographic profile.
+- Do not present Esri Tapestry segment names as definitive if the web search didn't return specific results for these ZIPs.
+- Do not generalize one ZIP's health behavior profile to the entire trade area — present per-ZIP data.

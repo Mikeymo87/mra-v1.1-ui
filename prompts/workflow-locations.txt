@@ -28,3 +28,13 @@ STEP 5: Present results grouped by radius band:
 Include ALL care types found. Do NOT weight or emphasize any care type over others unless the user's query is about a specific service line.
 
 "Specialty clinic" = ANY non-PCP, non-UC service: Imaging, Cardiology, Orthopedics, Cancer, Neuroscience, Women's Health, Sleep Medicine, Surgery, Physical Therapy, etc.
+
+MINIMUM EVIDENCE REQUIRED:
+- If "all locations" or "full inventory": searched all 19 Yext categories
+- If specific service lines mentioned: searched those plus PC and UC (the feeder network)
+- Calculated drive times for all found locations
+- De-duplicated by address
+
+WHAT NOT TO CONCLUDE:
+- Do not claim "BH has comprehensive coverage" unless all relevant categories were searched.
+- Do not claim "no BH presence" in a service line unless that service line was specifically searched in Yext.

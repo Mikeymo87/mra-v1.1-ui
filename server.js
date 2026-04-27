@@ -58,7 +58,7 @@ setInterval(() => {
 // ── Modular System Prompt ─────────────────────────────────────────���────────
 const PROMPT_DIR = path.join(__dirname, 'prompts');
 const CORE_PROMPT = fs.readFileSync(path.join(PROMPT_DIR, 'core.txt'), 'utf8');
-const REF_PROMPT = fs.readFileSync(path.join(PROMPT_DIR, 'reference-data.txt'), 'utf8');
+let REF_PROMPT = fs.readFileSync(path.join(PROMPT_DIR, 'reference-data.txt'), 'utf8');
 
 const WORKFLOW_FILES = {
   demographics: 'workflow-demographics.txt',
@@ -138,7 +138,7 @@ function classifyIntent(query) {
     intents.add('demographics');
   if (/where.*(bh|baptist)|find.*(location|facility|clinic)|locations?\s*(near|within)|what.*(locations?|facilities?)|network\s*inventory|footprint/i.test(q))
     intents.add('locations');
-  if (/physician|doctor|specialist|referral.*physician|who.*(bh|baptist).*(doctor|physician)|find.*(cardio|ortho|neuro|family\s*medicine|internal\s*medicine)/i.test(q))
+  if (/physician|doctor|specialist|cardiologist|orthopedist|neurologist|oncologist|surgeon|referral.*physician|who.*(bh|baptist).*(doctor|physician)|find.*(cardio|ortho|neuro|family\s*medicine|internal\s*medicine)|(bh|baptist).*(cardio|ortho|neuro|physician)/i.test(q))
     intents.add('physicians');
   if (/competitor|competition|competitive|rival|hca|jackson|cleveland\s*clinic|memorial|mount\s*sinai|threat|who.*there|who.*nearby/i.test(q))
     intents.add('competitive');
@@ -511,6 +511,45 @@ function setCensusCache(cacheKey, data, year) {
   censusCache[cacheKey] = { data, year, timestamp: Date.now() };
   // Write async — don't block the response
   fs.writeFile(CENSUS_CACHE_PATH, JSON.stringify(censusCache), () => {});
+}
+
+// ── CDC Benchmarks (percentiles across 195 South Florida ZIPs) ─────────────
+function computeBenchmarks(cdcData) {
+  const metrics = {};
+  const zips = Object.keys(cdcData);
+  if (zips.length < 10) return metrics;
+  // CDC data is nested: cdcData[zip].measures.METRIC
+  const sampleMeasures = cdcData[zips[0]]?.measures;
+  if (!sampleMeasures || typeof sampleMeasures !== 'object') return metrics;
+  for (const measure of Object.keys(sampleMeasures)) {
+    const values = zips.map(z => parseFloat(cdcData[z]?.measures?.[measure]?.value)).filter(v => !isNaN(v)).sort((a, b) => a - b);
+    if (values.length < 10) continue;
+    metrics[measure] = {
+      p10: values[Math.floor(values.length * 0.10)],
+      p25: values[Math.floor(values.length * 0.25)],
+      p50: values[Math.floor(values.length * 0.50)],
+      p75: values[Math.floor(values.length * 0.75)],
+      p90: values[Math.floor(values.length * 0.90)],
+      p95: values[Math.floor(values.length * 0.95)],
+    };
+  }
+  return metrics;
+}
+const CDC_BENCHMARKS = computeBenchmarks(cdcPlacesData);
+const benchmarkKeys = ['CHECKUP', 'DENTAL', 'LPA', 'OBESITY', 'CSMOKING', 'DIABETES', 'BPHIGH', 'DEPRESSION', 'ACCESS2', 'MAMMOUSE'];
+if (Object.keys(CDC_BENCHMARKS).length > 0) {
+  console.log(`  CDC Benchmarks: ${Object.keys(CDC_BENCHMARKS).length} measures computed`);
+  try { fs.writeFileSync(path.join(__dirname, 'data', 'zip-benchmarks.json'), JSON.stringify(CDC_BENCHMARKS, null, 2)); } catch (e) {}
+
+  // Inject top benchmarks into reference prompt for agent context
+  const bLines = ['\n\nSOUTH FLORIDA BENCHMARKS (195 ZIPs — use to flag outliers):'];
+  for (const key of benchmarkKeys) {
+    const b = CDC_BENCHMARKS[key];
+    if (b) bLines.push(`  ${key}: p10=${b.p10}% | p25=${b.p25}% | p50=${b.p50}% | p75=${b.p75}% | p90=${b.p90}% | p95=${b.p95}%`);
+  }
+  bLines.push('\nWhen presenting CDC data, if a value falls in the top 10% (above p90) or bottom 10% (below p10) for South Florida, flag it:');
+  bLines.push('> **Notable:** [metric] at [value]% is in the [top/bottom X%] of South Florida ZIPs.');
+  REF_PROMPT += bLines.join('\n');
 }
 
 // ── Tool Executors ──────────────────────────────────────────────────────────
@@ -983,6 +1022,75 @@ function sendSSE(res, event, data) {
   res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
 }
 
+// Human-readable label for tool progress timeline
+function humanizeToolCall(toolName, input) {
+  const labels = {
+    'geocode_address': 'Geocoding address',
+    'calculate_drive_times': 'Calculating drive times',
+    'census_demographics_lookup': 'Pulling Census demographics',
+    'cdc_health_behaviors': 'Loading CDC health behaviors',
+    'web_research': 'Searching the web',
+    'drive_time_isochrone': 'Generating drive-time polygon',
+    'google_reviews_deep_pull': 'Pulling Google reviews',
+    'one_medical_location_lookup': 'Checking One Medical locations',
+  };
+  if (labels[toolName]) return labels[toolName];
+  if (toolName === 'baptist_health_location_lookup') {
+    const decoded = decodeURIComponent((input.filter || '').replace(/\+/g, ' '));
+    const match = decoded.match(/\$contains[^"]*"([^"]+)"/);
+    return match ? `Searching BH ${match[1]} locations` : 'Searching BH locations';
+  }
+  if (toolName === 'baptist_health_physician_lookup') {
+    const decoded = decodeURIComponent((input.filter || '').replace(/\+/g, ' '));
+    const specMatch = decoded.match(/listOfSpecialties[^"]*"([^"]+)"/);
+    const cityMatch = decoded.match(/city[^"]*"([^"]+)"/);
+    let label = 'Searching BH physicians';
+    if (specMatch) label += ` — ${specMatch[1]}`;
+    if (cityMatch) label += ` in ${cityMatch[1]}`;
+    return label;
+  }
+  if (toolName === 'competitor_ratings_reviews') {
+    const decoded = decodeURIComponent((input.query || '').replace(/\+/g, ' '));
+    return `Searching competitors: ${decoded.substring(0, 50)}`;
+  }
+  return toolName.replace(/_/g, ' ');
+}
+
+// Accumulate geo data from tool results for map rendering
+function accumulateGeoData(geo, toolName, result) {
+  try {
+    const data = result.data;
+    if (toolName === 'geocode_address' && Array.isArray(data) && data[0]?.geometry?.location) {
+      const loc = data[0].geometry.location;
+      geo.origin = { lat: loc.lat, lng: loc.lng, label: data[0].formatted_address || 'Origin' };
+    }
+    if (toolName === 'baptist_health_location_lookup' && Array.isArray(data)) {
+      for (const e of data) {
+        if (e.geocodedCoordinate?.latitude) {
+          geo.bhLocations.push({
+            name: e.name, lat: e.geocodedCoordinate.latitude, lng: e.geocodedCoordinate.longitude,
+            address: e.address ? `${e.address.line1}, ${e.address.city}` : '',
+            type: e.name?.match(/Urgent|Same-Day/i) ? 'urgent' : e.name?.match(/Hospital/i) ? 'hospital' : 'specialty'
+          });
+        }
+      }
+    }
+    if (toolName === 'competitor_ratings_reviews' && Array.isArray(data)) {
+      for (const p of data) {
+        if (p.geometry?.location) {
+          geo.competitors.push({
+            name: p.name, lat: p.geometry.location.lat, lng: p.geometry.location.lng,
+            address: p.formatted_address || '', rating: p.rating, reviews: p.user_ratings_total
+          });
+        }
+      }
+    }
+    if (toolName === 'drive_time_isochrone' && data?.features) {
+      geo.isochrone = data;
+    }
+  } catch (e) { /* non-critical — skip if parsing fails */ }
+}
+
 async function runAgentLoop(sessionId, userMessage, res) {
   const session = getSession(sessionId);
   session.messages.push({ role: 'user', content: userMessage });
@@ -1010,6 +1118,10 @@ async function runAgentLoop(sessionId, userMessage, res) {
   let iterations = 0;
   let totalInputTokens = 0;
   let totalOutputTokens = 0;
+  let totalSteps = 0;
+
+  // Geo data accumulator for map rendering
+  const runGeo = { origin: null, bhLocations: [], competitors: [], isochrone: null };
 
   while (iterations < MAX_ITERATIONS) {
     iterations++;
@@ -1048,11 +1160,19 @@ async function runAgentLoop(sessionId, userMessage, res) {
       break;
     }
 
-    // Execute tool calls
+    // Execute tool calls with progress tracking
     const toolResults = [];
     const toolSummaries = [];
-    for (const toolCall of toolCalls) {
-      sendSSE(res, 'status', { message: `Calling ${toolCall.name.replace(/_/g, ' ')}...` });
+    for (let i = 0; i < toolCalls.length; i++) {
+      const toolCall = toolCalls[i];
+      const label = humanizeToolCall(toolCall.name, toolCall.input);
+
+      // Send structured progress: start
+      sendSSE(res, 'status', {
+        message: `Calling ${toolCall.name.replace(/_/g, ' ')}...`,
+        tool: toolCall.name, step: totalSteps + i + 1, total: totalSteps + toolCalls.length,
+        phase: 'start', label
+      });
       console.log(`[Agent] Tool call: ${toolCall.name}`, JSON.stringify(toolCall.input).substring(0, 200));
 
       const t0 = Date.now();
@@ -1060,8 +1180,18 @@ async function runAgentLoop(sessionId, userMessage, res) {
       const duration = Date.now() - t0;
       const fullContent = JSON.stringify(result);
 
+      // Send structured progress: done
+      sendSSE(res, 'status', {
+        message: `${label} — done`,
+        tool: toolCall.name, step: totalSteps + i + 1, total: totalSteps + toolCalls.length,
+        phase: 'done', label, duration_ms: duration, result_count: result.result_count || 0
+      });
+
       // Track evidence coverage
       updateEvidenceCoverage(evidence, toolCall.name, toolCall.input);
+
+      // Accumulate geo data for potential map rendering
+      accumulateGeoData(runGeo, toolCall.name, result);
 
       // SQLite: log tool call
       insertToolCall.run(
@@ -1073,6 +1203,7 @@ async function runAgentLoop(sessionId, userMessage, res) {
       toolResults.push({ type: 'tool_result', tool_use_id: toolCall.id, content: fullContent });
       toolSummaries.push({ type: 'tool_result', tool_use_id: toolCall.id, content: compressToolResult(toolCall.name, fullContent) });
     }
+    totalSteps += toolCalls.length;
 
     session.messages.push({ role: 'user', content: toolResults });
 
@@ -1097,6 +1228,21 @@ async function runAgentLoop(sessionId, userMessage, res) {
     fullText += gapWarning;
   }
   console.log(`[Evidence] BH searched: [${evidence.bhServiceLinesSearched.join(', ')}] | Competitors: ${evidence.competitorSearches.length} searches | Geocode: ${evidence.geocodeDone} | Census: ${evidence.censusDone} | CDC: ${evidence.cdcDone}`);
+
+  // Send map data if geo data was collected AND user asked for a map or isochrone was called
+  const wantsMap = /map\s*(this|these|it|them)|show.*map|plot.*map|map.*location|visuali/i.test(userMessage);
+  const hasGeoData = runGeo.origin || runGeo.bhLocations.length > 0 || runGeo.competitors.length > 0;
+  if (hasGeoData && (wantsMap || runGeo.isochrone)) {
+    const mapData = {
+      center: runGeo.origin || (runGeo.bhLocations[0] ? { lat: runGeo.bhLocations[0].lat, lng: runGeo.bhLocations[0].lng } : null),
+      origin: runGeo.origin,
+      bhLocations: runGeo.bhLocations,
+      competitors: runGeo.competitors,
+      isochrone: runGeo.isochrone
+    };
+    sendSSE(res, 'map_data', mapData);
+    console.log(`[Map] Sent map data: ${runGeo.bhLocations.length} BH + ${runGeo.competitors.length} competitors${runGeo.isochrone ? ' + isochrone' : ''}`);
+  }
 
   // Compress tool results in session history
   if (session._pendingCompression) {

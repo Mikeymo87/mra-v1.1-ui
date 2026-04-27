@@ -84,3 +84,22 @@ When analyzing a trade area or building a marketing plan:
 - The success KPI is commercial payer mix percentage. 40%+ commercial = viable market.
 - Do NOT frame Medicaid exposure or government-payer volume as "adding volume and diversity." That is not a marketing opportunity.
 - When presenting cohort scores, lead with commercially insured segments. Government-payer segments go last, labeled "operational context — no marketing spend."
+
+MINIMUM EVIDENCE REQUIRED:
+For a full demographic analysis, you MUST have:
+- Population and age distribution (DP05 variables) — at least one Census call
+- Income, education, language, housing (DP02/DP03/DP04 variables) — at least one Census call
+- Payer mix: commercial, Medicare, Medicaid, uninsured (DP03 + Subject Tables) — at least two Census calls
+- Commercially addressable population calculated (ages 18-64 count and %)
+If any Census call failed and was not cached, state which data is missing and label the analysis as partial.
+
+For psychographic enrichment (if requested or if Marketing Planner Mode is active):
+- CDC health behaviors for the same ZIPs — MUST call cdc_health_behaviors
+- Segment scoring with behavioral evidence from CDC data
+
+WHAT NOT TO CONCLUDE:
+- Do not claim a ZIP has "strong" or "weak" payer mix without citing the actual commercial insurance percentage.
+- Do not present age percentages calculated from raw counts unless the server pre-calculated them (check for _PCT columns).
+- Do not claim demographic trends — Census ACS is a snapshot, not longitudinal data.
+- Do not mix count variables (E suffix) with percentage variables (PE suffix) in the same column.
+- When presenting cohort scores, lead with commercially insured segments. Government-payer segments go last, labeled "operational context — no marketing spend."
