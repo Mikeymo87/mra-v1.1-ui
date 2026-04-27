@@ -1231,6 +1231,10 @@ async function runAgentLoop(sessionId, userMessage, res) {
 
   // Send map data if geo data was collected AND user asked for a map or isochrone was called
   const wantsMap = /map\s*(this|these|it|them|all|bh)|show.*map|plot.*map|map.*location|visuali|^map\b/i.test(userMessage);
+  // Fallback: if accumulateGeoData missed the origin, use executeTool._originCoords
+  if (!runGeo.origin && executeTool._originCoords) {
+    runGeo.origin = { lat: executeTool._originCoords.lat, lng: executeTool._originCoords.lng, label: 'Origin' };
+  }
   const hasGeoData = runGeo.origin || runGeo.bhLocations.length > 0 || runGeo.competitors.length > 0;
   if (hasGeoData && (wantsMap || runGeo.isochrone)) {
     // Filter map pins to only show locations near the origin (within 15 miles)
