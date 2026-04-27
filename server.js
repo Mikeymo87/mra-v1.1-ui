@@ -1230,18 +1230,31 @@ async function runAgentLoop(sessionId, userMessage, res) {
   console.log(`[Evidence] BH searched: [${evidence.bhServiceLinesSearched.join(', ')}] | Competitors: ${evidence.competitorSearches.length} searches | Geocode: ${evidence.geocodeDone} | Census: ${evidence.censusDone} | CDC: ${evidence.cdcDone}`);
 
   // Send map data if geo data was collected AND user asked for a map or isochrone was called
-  const wantsMap = /map\s*(this|these|it|them)|show.*map|plot.*map|map.*location|visuali/i.test(userMessage);
+  const wantsMap = /map\s*(this|these|it|them|all|bh)|show.*map|plot.*map|map.*location|visuali|^map\b/i.test(userMessage);
   const hasGeoData = runGeo.origin || runGeo.bhLocations.length > 0 || runGeo.competitors.length > 0;
   if (hasGeoData && (wantsMap || runGeo.isochrone)) {
+    // Filter map pins to only show locations near the origin (within 15 miles)
+    let bhFiltered = runGeo.bhLocations;
+    let compFiltered = runGeo.competitors;
+    if (runGeo.origin) {
+      const mapRadius = 15; // miles — only show nearby on map
+      bhFiltered = runGeo.bhLocations.filter(l =>
+        haversineDistance(runGeo.origin.lat, runGeo.origin.lng, l.lat, l.lng) <= mapRadius
+      );
+      compFiltered = runGeo.competitors.filter(c =>
+        haversineDistance(runGeo.origin.lat, runGeo.origin.lng, c.lat, c.lng) <= mapRadius
+      );
+      console.log(`[Map] Filtered: ${runGeo.bhLocations.length} BH → ${bhFiltered.length} nearby | ${runGeo.competitors.length} comp → ${compFiltered.length} nearby (${mapRadius}mi radius)`);
+    }
     const mapData = {
-      center: runGeo.origin || (runGeo.bhLocations[0] ? { lat: runGeo.bhLocations[0].lat, lng: runGeo.bhLocations[0].lng } : null),
+      center: runGeo.origin || (bhFiltered[0] ? { lat: bhFiltered[0].lat, lng: bhFiltered[0].lng } : null),
       origin: runGeo.origin,
-      bhLocations: runGeo.bhLocations,
-      competitors: runGeo.competitors,
+      bhLocations: bhFiltered,
+      competitors: compFiltered,
       isochrone: runGeo.isochrone
     };
     sendSSE(res, 'map_data', mapData);
-    console.log(`[Map] Sent map data: ${runGeo.bhLocations.length} BH + ${runGeo.competitors.length} competitors${runGeo.isochrone ? ' + isochrone' : ''}`);
+    console.log(`[Map] Sent: ${bhFiltered.length} BH + ${compFiltered.length} competitors${runGeo.isochrone ? ' + isochrone' : ''}`);
   }
 
   // Compress tool results in session history
