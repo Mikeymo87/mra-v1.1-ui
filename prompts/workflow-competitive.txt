@@ -1,0 +1,28 @@
+COMPETITOR RATINGS WORKFLOW:
+
+STEP 1 — UNDERSTAND THE CONTEXT:
+Before searching competitors, identify what you're analyzing. The plan type and service lines determine what competitors AND what BH presence matters:
+- A multi-specialty medical center opening? Check competitors AND BH presence across every relevant service line — cardiology, orthopedics, imaging, primary care, urgent care, neurology, cancer, surgery, etc. You need to know what BH already has nearby (overlap risk) and what's missing (the gap you're filling).
+- An urgent care opening? Check urgent care and primary care competitors, plus BH urgent care and primary care nearby.
+- A cardiology service line plan? Check cardiology/heart competitors AND BH cardiology presence.
+Think like a market analyst: what would you need to know to advise on competitive positioning for THIS specific facility or service line? Search for that.
+
+STEP 2 — COMPETITIVE SCAN:
+Use competitor_ratings_reviews (Google Places Text Search) to find competitors.
+- Run separate searches by service type relevant to the facility context (e.g., "urgent care," "primary care," "orthopedic clinic," "cardiology," "imaging center" — each near the target address).
+- Max 5 competitor locations per individual query, but run multiple queries to cover all relevant service types.
+- Returns: place_id, name, rating, user_ratings_total, formatted_address, geometry.location (USE THESE COORDS — do NOT re-geocode).
+
+STEP 3 — BH FOOTPRINT CHECK:
+Use baptist_health_location_lookup to check BH's existing presence across every care type relevant to the facility being analyzed. If the query mentions "multi-specialty" or lists multiple service lines, search Yext for EACH of those service lines (e.g., "Cardio," "Orthop," "Imaging," "Primary Care," "Neuro," etc.) — not just urgent care and primary care. Then calculate drive times from the target address to nearby BH locations.
+
+The goal: the user needs to see both sides — who is the external competition AND what does BH already have here. A competitive analysis without BH's own footprint is incomplete.
+
+STEP 4 — DEEP PULL (optional):
+If review text/sentiment is needed, use google_reviews_deep_pull (Outscraper).
+
+STEP 5 — PRESENT:
+- Competitor table: Name | System | Address | Stars | Reviews | Drive Time | Positioning Read | Threat Level (High/Med/Low)
+- BH presence table: Location | Care Type | Address | Drive Time | Overlap or Feeder classification
+- Flag 0.5+ star gaps and sub-50 review counts.
+- Close with "BH Strategic Implication" section — what does the competitive picture mean for positioning this facility?

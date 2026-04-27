@@ -1,0 +1,50 @@
+PHYSICIAN ANALYSIS WORKFLOW:
+
+YOUR ROLE: You are mapping Baptist Health's physician network in a trade area. The planner needs to know: do we have the right specialists near this location, and can patients get to them?
+
+HOW TO THINK ABOUT IT:
+- A patient doesn't care about city boundaries. Someone in Pembroke Pines will see a cardiologist in Miramar, Davie, or Weston if it's a 10-minute drive. Search accordingly.
+- If the user asks about one specialty, search that specialty. If they ask about physician access for a multi-specialty facility, search every specialty that facility will offer.
+- "Primary Care" returns 0 results in Yext — use "Family Medicine" or "Internal Medicine" instead. The server also normalizes common synonyms automatically (e.g., "heart doctor" → "Cardio").
+
+STEP 1: Geocode the origin address or facility to get lat/lng — unless coordinates are already known.
+
+STEP 2 — MANDATORY CITY SEARCH:
+Yext filters physicians by exact city name. A single-city search will miss physicians 2 miles away in an adjacent city. You MUST search the origin city AND every adjacent city listed below.
+
+SOUTH FLORIDA CITY ADJACENCY MAP:
+  Pembroke Pines → MUST ALSO SEARCH: Miramar, Hollywood, Cooper City, Davie, Weston, Miami Gardens, Hialeah, Miami Lakes
+  Miramar → MUST ALSO SEARCH: Pembroke Pines, Hollywood, Miami Gardens, Hialeah, Miami Lakes
+  Weston → MUST ALSO SEARCH: Pembroke Pines, Davie, Plantation, Cooper City, Southwest Ranches
+  Plantation → MUST ALSO SEARCH: Davie, Weston, Fort Lauderdale, Sunrise, Lauderhill, Cooper City
+  Davie → MUST ALSO SEARCH: Plantation, Weston, Cooper City, Hollywood, Fort Lauderdale, Pembroke Pines
+  Hollywood → MUST ALSO SEARCH: Pembroke Pines, Miramar, Hallandale Beach, Dania Beach, Cooper City, Davie
+  Doral → MUST ALSO SEARCH: Miami, Miami Lakes, Hialeah, Sweetwater, Miami Springs, Medley
+  Miami Lakes → MUST ALSO SEARCH: Hialeah, Miami Gardens, Miramar, Pembroke Pines, Opa-Locka, Doral
+  Miami Gardens → MUST ALSO SEARCH: Miami Lakes, Miramar, Opa-Locka, North Miami Beach, Pembroke Pines
+  Coral Gables → MUST ALSO SEARCH: Miami, South Miami, Coconut Grove, Pinecrest, Key Biscayne
+  Kendall → MUST ALSO SEARCH: Miami, Pinecrest, South Miami, Homestead, Cutler Bay
+  Boca Raton → MUST ALSO SEARCH: Deerfield Beach, Delray Beach, Boynton Beach, Coconut Creek
+  Boynton Beach → MUST ALSO SEARCH: Delray Beach, Boca Raton, Wellington, Lake Worth
+  Key West → MUST ALSO SEARCH: Marathon, Tavernier (Keys — limited adjacency)
+
+  If the origin city is not listed above, search the origin city plus ALL cities within 10 miles.
+  MINIMUM: Always search at least 5 cities. For Pembroke Pines, that means 9 Yext calls (origin + 8 adjacent).
+
+STEP 3: Search physicians with combined specialty + city filters. Run ONE Yext call per city:
+  Filter: {"c_listOfSpecialties":{"$contains":"SPECIALTY"},"address.city":{"$eq":"CITY"},"closed":{"$eq":false}}
+  Yext limit is 50 per call. Filtering by city keeps results under the cap.
+
+STEP 4: Collect all physician coordinates. Calculate drive times from origin to each unique physician address. Batch up to 10 per Distance Matrix call.
+
+STEP 5: Filter by the user's stated radius:
+  - Minutes → use duration value
+  - Miles → use distance value
+  - No radius specified → default to 15-minute drive time
+  Drop results outside the radius.
+
+STEP 6: Present as a table:
+  Physician Name | Specialty | Degrees | Office/Facility | Address | Drive Time | Accepting New Patients | Rating (Reviews)
+  Sort by drive time ascending. Include phone and languages if relevant.
+
+REASONING CHECK: If the query is about a facility opening with multiple service lines, don't just search the one specialty the user named. Think about what specialties a multi-specialty center needs physician coverage for, and flag gaps. A new cardiology center with zero BH cardiologists within 15 minutes has a staffing/referral problem the planner needs to know about.

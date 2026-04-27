@@ -1,0 +1,74 @@
+PSYCHOGRAPHIC PROFILING — 3-LAYER APPROACH:
+Build psychographic profiles by layering THREE data sources. All three should fire for any psychographic or segment analysis query.
+
+LAYER 1 — CENSUS ACS PROXY VARIABLES:
+Census provides demographic indicators that signal lifestyle patterns.
+
+DATA PROFILES (/acs/acs5/profile) — call 1:
+DP02_0068PE=% bachelors+. DP02_0113PE=% foreign born. DP03_0062E=median HHI. DP03_0009PE=% unemployment. DP03_0027PE=% management occupations. DP04_0046PE=% owner-occupied. DP05_0019PE=% age 65+. DP05_0024PE=% age 18-34.
+
+PSYCHOGRAPHIC PROFILE CALL (single call for a ZIP):
+https://api.census.gov/data/2024/acs/acs5/profile?get=NAME,DP02_0068PE,DP02_0113PE,DP02_0072PE,DP03_0062E,DP03_0009PE,DP03_0027PE,DP04_0046PE,DP04_0089E,DP04_0134E,DP05_0019PE,DP05_0024PE&for=zip+code+tabulation+area:ZIPCODE
+
+DETAILED TABLES — call 2 (expanded lifestyle indicators):
+https://api.census.gov/data/2024/acs/acs5?get=NAME,B11003_003E,B11003_010E,B08301_021E,B08301_010E,B16001_003E,B16001_006E,B28002_004E,B28002_013E,B08141_002E,B19001_017E,B23025_003E,B15003_022E,B15003_023E,B15003_024E,B15003_025E&for=zip+code+tabulation+area:ZIPCODE
+Key variables: B08301_021E=work from home, B08301_010E=public transit, B11003_003E=married w/kids, B08141_002E=no vehicle, B19001_017E=$200K+ households, B23025_003E=in labor force, B15003_022-025E=graduate+ degrees.
+
+LAYER 2 — CDC HEALTH BEHAVIORS (tool: cdc_health_behaviors):
+Call cdc_health_behaviors with the same ZIP codes. This returns ACTUAL BEHAVIORAL DATA — not proxies. 33 measures including:
+- CHECKUP = % with routine doctor visit past year (healthcare engagement)
+- DENTAL = % with dental visit past year (preventive mindset)
+- LPA = % physically inactive (lifestyle indicator)
+- OBESITY = % obese (health risk)
+- CSMOKING = % current smokers (risk behavior)
+- BINGE = % binge drinkers (lifestyle)
+- SLEEP = % short sleep (<7hrs) (stress/overwork indicator)
+- DEPRESSION = % with depression diagnosis (mental health)
+- MHLTH = % frequent mental health distress (wellness)
+- DIABETES, BPHIGH, HIGHCHOL, CHD = chronic disease prevalence (clinical demand)
+- ACCESS2 = % uninsured 18-64 (payer validation)
+- MAMMOUSE, COLON_SCREEN, CHOLSCREEN = preventive screening rates (health-conscious signal)
+- DISABILITY, MOBILITY, COGNITION = functional limitation prevalence
+
+This data is LOCAL (instant, no API call). Always call it alongside Census for psychographic queries.
+
+LAYER 3 — ESRI TAPESTRY (Web Research):
+After Census + CDC, use Web Research to search: "Esri Tapestry segmentation [ZIP/city] Florida". Incorporate published segment names when found.
+
+SEGMENT SCORING WITH BEHAVIORAL EVIDENCE:
+When scoring BH's 12 audience segments, use ALL THREE layers. The CDC data provides the behavioral proof:
+- STABLE AND SEEKING CARE: High CHECKUP (>75%), high CHOLSCREEN, low LPA, high income, owner-occupied, commercially insured
+- PINTEREST AND PLANNING: Low OBESITY, low CSMOKING, high DENTAL, young women 25-44, high education
+- BRICKELL BRIEFCASE: High SLEEP issues, moderate MHLTH, low CHECKUP (busy/defers care), no vehicle, urban, 25-40
+- ONE DAY AT A TIME: High DIABETES + BPHIGH + OBESITY, low income, moderate age, high clinical need
+- GRIT AND GRIND: High ACCESS2 (uninsured), low CHECKUP, low DENTAL, high LPA, low income
+- WEEKEND WARRIORS: High BINGE, low CHECKUP, young male, Medicaid
+- MI FAMILIA PRIMERO: High foreign-born, Spanish-speaking, moderate CHECKUP (family-driven care), high DENTAL
+- BABIES AND BILLS: Young, high ACCESS2, low income, moderate DEPRESSION
+- EMPTY NESTS FULL POCKETS: Low OBESITY, high MAMMOUSE/COLON_SCREEN, high income, 55-64, active
+- SNOWBIRD CIRCUIT: High CHECKUP, high preventive screening, 65+, affluent, seasonal
+- SENIOR DISCOUNTS: High chronic disease (CHD, STROKE, COPD), high DISABILITY, Medicare, 65+
+- SETTLING DOWN: Moderate CHECKUP, married w/kids, moderate income, male 30-44
+
+Present psychographic results as:
+1. CENSUS INDICATORS table (demographic proxies)
+2. HEALTH BEHAVIORS table (CDC data — behavioral reality)
+3. SEGMENT SCORES table (1-5 per segment, with behavioral evidence cited)
+
+BH AUDIENCE SEGMENTS — FRAMEWORK:
+12 consumer segments for targeting. Use Census ACS data and web research to estimate segment prevalence. Never use pre-set percentages — always derive from live data.
+
+- BABIES AND BILLS — Young women, Medicaid-dominant. High maternity/obstetrics. Digital/social media responsive.
+- PINTEREST AND PLANNING — Younger women, commercially insured, health-conscious, active lifestyles. Digital-first. High household value.
+- SETTLING DOWN — Young married men. Healthcare influenced by female partner. ED/Urgent Care users who need Primary Care.
+- WEEKEND WARRIORS — Single men, Medicaid-dominant. ED entry, substance abuse, trauma risk. Hardest to engage.
+- ONE DAY AT A TIME — Middle-age, diverse, lower income. Metabolic syndrome dominant. High clinical need.
+- STABLE AND SEEKING CARE — Largest segment. Commercially insured, highest value. Enter through Primary Care.
+- SENIOR DISCOUNTS — Older adults, Medicare. Highest chronic burden. Vascular, neuro, cardiology risk.
+- EMPTY NESTS, FULL POCKETS — Affluent seniors, active lifestyles. Musculoskeletal > cardiac. High digital adoption.
+- BRICKELL BRIEFCASE — Young urban professionals 25-40. Employer-sponsored commercial insurance. Convenience-driven.
+- MI FAMILIA PRIMERO — Multigenerational Hispanic/Latino households. Family is the healthcare decision unit. Bilingual access non-negotiable.
+- SNOWBIRD CIRCUIT — Seasonal residents (Nov-Apr), typically affluent 60+ from Northeast/Midwest. Demand concierge and specialist access.
+- GRIT AND GRIND — Blue-collar workers, trades, service industry. Often uninsured. Defer care until acute. Price-sensitive.
+
+SEGMENT SCORING RULE: Match proxy variables (age, income, insurance type, household structure, ethnicity, language, occupation, housing) to each segment's profile. Score 1-5. Score 0 if absent.

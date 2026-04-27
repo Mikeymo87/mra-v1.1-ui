@@ -70,11 +70,10 @@ Cardio (359) | Vascular (120) | Orthop (285) | Neuro (468) | Oncol (373) | Famil
 - Physician search depends on city adjacency map — unlisted cities fall back to model's geographic knowledge
 - No ZIP filter for physicians — use city + drive time
 - Sub-specialty physicians (Breast, Maternal-Fetal, etc.) not in Yext
-- Model is claude-sonnet-4-20250514 (deprecated EOL June 15, 2026) — upgrade when API tier allows
+- Model is claude-sonnet-4-6 (current)
 
 ## What's Next
 - Marketing Plan GPT integration (handoff doc delivered)
 - Add loading/thinking indicator to UI
-- Upgrade to claude-sonnet-4-6
 - Remove client-side Yext pre-load (API key exposed in browser)
 - Test competitor queries, reviews deep pull, isochrones

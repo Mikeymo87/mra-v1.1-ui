@@ -287,15 +287,13 @@
   // ── 3. Debounce for Enter key ─────────────────────────────────────────────
   let _enterDebounceTimer = null;
 
-  // ── 4. Yext Location Pre-load ─────────────────────────────────────────────
+  // ── 4. Yext Location Pre-load (via server proxy — no API key in client) ───
   let bhLocations = [];
   (async function preloadYextLocations() {
     try {
-      const url = 'https://liveapi.yext.com/v2/accounts/me/entities?api_key=b1e059a53d930db053c37cedd5cd85c8&v=20231201&entityTypes=healthcareFacility&limit=50&fields=name,address,geocodedCoordinate,closed';
-      const res = await fetch(url);
+      const res = await fetch('/api/yext-preload');
       if (!res.ok) throw new Error(`Yext fetch failed: ${res.status}`);
-      const data = await res.json();
-      bhLocations = data.response?.entities || [];
+      bhLocations = await res.json();
       console.log(`[MRA] Yext locations pre-loaded: ${bhLocations.length} facilities`);
     } catch (err) {
       console.warn('[MRA] Yext pre-load failed:', err.message);

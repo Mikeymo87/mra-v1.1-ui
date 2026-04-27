@@ -1,0 +1,65 @@
+MARKET TERRITORY:
+- Miami-Dade: county 086, state 12 (~2.7M)
+- Broward: county 011, state 12 (~1.9M)
+- Palm Beach: county 099, state 12 (~1.5M)
+- Monroe: county 087, state 12 (~83K)
+
+SERVICE TAXONOMY:
+Cancer Care | Heart & Vascular | Brain & Spine | Orthopedic Care | Primary Care | Same-Day Care
+Families: Urgent & Access | Surgical & Procedural | Diagnostics & Screening | Specialty Medical | Relationship & Life Stage
+Map aliases to canonical parent. Mark unverified if not in taxonomy.
+
+YEXT KEYWORD REFERENCE (for Baptist Health Location Lookup tool):
+These are verified Yext $contains keywords with entity counts (as of March 2026). Use EXACTLY these keywords — other terms return 0 results.
+
+FACILITY TYPE KEYWORDS (by map category):
+  Hospitals:            "Hospital" (73)
+  Off-campus ED:        "Emergency" (16)
+  Primary Care:         "Primary Care" (46) — also catches Family Medicine, Internal Medicine
+  Urgent Care:          "Urgent Care" OR "Same-Day Care" ($or filter, one call)
+  Urgent Care Express:  "Express" (6)
+  Diagnostic Imaging:   "Imaging" (50)
+  Sleep Care:           "Sleep" (7)
+  Endoscopy:            "Endoscopy" (11)
+  Outpatient Surgery:   "Surgery" (22+)
+  Physical Therapy:     "Physical Therapy" (13) or "Rehabilitation" (17)
+  Infusion Care:        "Infusion" (9)
+  Pharmacy:             "Pharmacy" (6)
+  Concierge Medicine:   "Concierge" (11)
+
+SPECIALTY / INSTITUTE KEYWORDS:
+  Cardiology/Heart:     "Cardio" (24) or "Vascular" (15)
+  Orthopedics:          "Orthop" (30+)
+  Neuroscience:         "Neuro" (27) or "Spine" (22)
+  Cancer/Oncology:      "Cancer" (28)
+  Urology:              "Urology" (17)
+  Gastroenterology:     "Gastro" (4)
+  Gynecology:           "Gynecology" (3)
+  Women's Health:       "Women" (5)
+  Nephrology:           "Nephrology" (2)
+  Institutes (flagship): "Institute" (28)
+  Executive Health:     "Executive Health" (1)
+
+ZERO-RESULT KEYWORDS (do NOT use — not in Yext):
+  Breast, Maternal, Palliative, Preventive, Colon, Colorectal, Pancreatic, Bariatric, Plastic, Dermatology, ENT, Allergy, Rheumatology, Wound, Pulmonary, Pain, Psychiatry, Specialty
+
+Coming Soon locations: label them clearly.
+Coordinates: use geocodedCoordinate.latitude/.longitude — NEVER re-geocode.
+YEXT TIP: "Urgent Care" and "Same-Day Care" are the same service line — use a $or filter to catch both in one call. This does NOT mean one Yext call total is sufficient for a multi-category query.
+
+ONE MEDICAL — STRATEGIC REFERRAL PARTNER:
+One Medical (owned by Amazon) is a primary care partner for Baptist Health. Model: One Medical handles primary care → refers specialty and hospital services to BH. EHRs are integrated.
+- 7 clinics: Doral, Brickell, Aventura, Coconut Grove, Dadeland (Miami-Dade); Pembroke Gardens, Las Olas (Broward). No Palm Beach or Monroe locations.
+- One Medical clinics are FEEDER locations for BH specialty referrals — NOT competitors.
+- One Medical locations include lat/lng coordinates — use directly with calculate_drive_times (no geocoding needed).
+
+KEY COMPETITORS (18 systems):
+Broward Health | CHS | Cleveland Clinic Florida | HCA Florida [+ MD Now] | Holy Cross/Trinity | HSA | Jackson Health | Jupiter Medical Center | Keralty | Lakeside/HCD PBC | Larkin | Memorial Healthcare | Mount Sinai | Nicklaus Childrens | Palm Beach Health/Tenet | UHealth/UM | UHS | Baptist Health US (different system, not us)
+For all-provider queries: use Web Research. For HCA also search MD Now. For BH-only: use Yext.
+
+PHYSICIAN YEXT KEYWORD REFERENCE (for c_listOfSpecialties filter):
+  Cardio (359) | Vascular (120) | Orthop (285) | Neuro (468) | Oncol (373) | Family Medicine (277) | Internal Medicine (610) | Gastro (246) | Urolog (137) | Pulmon (100) | Dermatol (72) | OB (384) | Pediatr (626) | Emergency (646) | Surgery (770) | Pain (102) | Endocrin (102) | Ophthalmol (217) | Radiol (363) | Psychiatr (63) | Rheumat (18) | Nephrol (2)
+  Use partial keywords (e.g., "Cardio" not "Cardiology") to catch all variants.
+  "Primary Care" returns 0 — use "Family Medicine" or "Internal Medicine" instead.
+
+IMPORTANT: The physician filter field is c_listOfSpecialties (NOT c_specialty — that field does not exist). The fields returned are: name, c_listOfSpecialties, c_providerTitle, degrees, address, geocodedCoordinate, mainPhone, languages, npi, acceptingNewPatients, c_averageReviewRating, c_reviewCount, officeName. The field c_credentials does NOT exist — use degrees instead.
