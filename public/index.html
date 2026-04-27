@@ -180,7 +180,8 @@
     .followup-btn:hover { background: var(--green); color: white; }
 
     /* Map Container */
-    .map-container { width: 100%; height: 350px; border-radius: 8px; margin-top: 8px; border: 1px solid var(--border); overflow: hidden; }
+    .map-container { width: 100%; height: 350px; border-radius: 8px; margin-top: 8px; border: 1px solid var(--border); overflow: hidden; z-index: 1; }
+    .map-container .leaflet-container { width: 100% !important; height: 100% !important; }
     .map-toggle { font-size: 12px; color: var(--green); cursor: pointer; margin-top: 4px; background: none; border: none; font-family: inherit; }
     .map-toggle:hover { text-decoration: underline; }
 
@@ -1199,6 +1200,9 @@ ${rendered}
       for (const l of (mapData.bhLocations || [])) allPoints.push([l.lat, l.lng]);
       for (const c of (mapData.competitors || [])) allPoints.push([c.lat, c.lng]);
       if (allPoints.length > 1) map.fitBounds(allPoints, { padding: [30, 30] });
+
+      // Fix tile rendering — invalidate size after DOM settles
+      setTimeout(() => { map.invalidateSize(); }, 200);
 
       messagesEl.scrollTop = messagesEl.scrollHeight;
     } catch (e) {
