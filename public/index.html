@@ -682,6 +682,14 @@
       }
     }
 
+    // Extract follow-ups from raw markdown BEFORE rendering (marked strips HTML comments)
+    let followupSuggestions = null;
+    const followupMatch = markdown.match(/<!--FOLLOWUPS:\s*(\[[\s\S]*?\])\s*-->/);
+    if (followupMatch) {
+      try { followupSuggestions = JSON.parse(followupMatch[1]); } catch (e) {}
+      markdown = markdown.replace(/<!--FOLLOWUPS:[\s\S]*?-->/g, ''); // strip before render
+    }
+
     // Final render
     clearTimeout(renderTimer);
     renderMarkdown();
@@ -715,31 +723,21 @@
       actions.append(copyBtn, pdfBtn, wordBtn);
       wrapEl.appendChild(actions);
 
-      // Parse and render follow-up suggestions
-      const followupMatch = markdown.match(/<!--FOLLOWUPS:\s*(\[.*?\])\s*-->/s);
-      if (followupMatch) {
-        try {
-          const suggestions = JSON.parse(followupMatch[1]);
-          if (Array.isArray(suggestions) && suggestions.length > 0) {
-            const row = document.createElement('div');
-            row.className = 'followup-row';
-            for (const s of suggestions.slice(0, 4)) {
-              const btn = document.createElement('button');
-              btn.className = 'followup-btn';
-              btn.textContent = s;
-              btn.addEventListener('click', () => {
-                queryInput.value = s;
-                send();
-              });
-              row.appendChild(btn);
-            }
-            wrapEl.appendChild(row);
-          }
-        } catch (e) { /* malformed JSON — skip */ }
-        // Strip the comment from displayed markdown
-        if (bubbleEl) {
-          bubbleEl.innerHTML = bubbleEl.innerHTML.replace(/<!--FOLLOWUPS:.*?-->/gs, '');
+      // Render follow-up suggestions (pre-extracted before marked.parse)
+      if (followupSuggestions && Array.isArray(followupSuggestions) && followupSuggestions.length > 0) {
+        const row = document.createElement('div');
+        row.className = 'followup-row';
+        for (const s of followupSuggestions.slice(0, 4)) {
+          const btn = document.createElement('button');
+          btn.className = 'followup-btn';
+          btn.textContent = s;
+          btn.addEventListener('click', () => {
+            queryInput.value = s;
+            send();
+          });
+          row.appendChild(btn);
         }
+        wrapEl.appendChild(row);
       }
 
       // Render map if map_data was received
