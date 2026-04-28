@@ -226,7 +226,7 @@
 <header>
   <span class="bh-badge">BH</span>
   <span class="header-title">Market Research Agent</span>
-  <span class="header-sub">Strategy &amp; Insight · v3.0</span>
+  <span class="header-sub">Strategy &amp; Insight · v3.2</span>
   <div class="header-status">
     <div class="status-dot" id="statusDot"></div>
     <span id="statusText">Ready</span>
@@ -471,7 +471,10 @@
     if (!query || sendBtn.disabled) return;
 
     // Step 0: Smart clarification — catch vague queries before calling the agent
-    if (!window._skipClarification) {
+    // Skip on follow-ups (conversation already has context) or context-referencing queries
+    const hasConversation = messagesEl.querySelectorAll('.msg-bubble').length > 0;
+    const referencesContext = /\b(those|these|that|the)\s+(area|zone|location|isochrone|trade area|map|zip|region)|follow.?up|from (above|before|earlier)|same\s+(area|zone)/i.test(query);
+    if (!window._skipClarification && !hasConversation && !referencesContext) {
       const clarification = detectVagueQuery(query);
       if (clarification) {
         welcomeEl?.remove();
@@ -598,6 +601,7 @@
     let wrapEl = null;
     let renderTimer = null;
     let pendingMapData = null;
+    let pendingChoropleth = null;
 
     function ensureBubble() {
       if (bubbleEl) return;
@@ -674,6 +678,9 @@
           } else if (eventType === 'map_data') {
             // Store map data — render after text is done
             pendingMapData = payload;
+          } else if (eventType === 'choropleth_data') {
+            // Store choropleth data — render after text is done
+            pendingChoropleth = payload;
           } else if (eventType === 'done') {
             if (payload.text) markdown = payload.text;
           } else if (eventType === 'error') {
@@ -746,6 +753,10 @@
         renderMap(pendingMapData);
         pendingMapData = null;
       }
+      if (pendingChoropleth) {
+        renderChoropleth(pendingChoropleth);
+        pendingChoropleth = null;
+      }
     }
 
     return markdown;
@@ -786,8 +797,12 @@
     }
 
     // Vague demographics: no ZIP or area specified
+    // Skip for choropleth/heat map requests — those map all 195 ZIPs by design
+    const isChoroplethQuery = /\b(map|heat\s*map|visualize|show)\b.*\b(across|by zip|by ZIP|across.*florida|across.*poa)\b/i.test(q)
+      || /\bheat\s*map\b/i.test(q);
+    if (isChoroplethQuery) return null;
     const isDemoQuery = /demograph|payer mix|population|income|insurance|census/i.test(q);
-    const hasGeo = /\d{5}|miami|broward|palm beach|doral|coral gables|brickell|homestead|kendall|hollywood|plantation|pembroke|miramar|boca|boynton|delray|west palm|wellington/i.test(q);
+    const hasGeo = /\d{5}|miami|broward|palm beach|doral|coral gables|brickell|homestead|kendall|hollywood|plantation|pembroke|miramar|boca|boynton|delray|west palm|wellington|south florida|poa|primary operating|monroe/i.test(q);
     if (isDemoQuery && !hasGeo) {
       return {
         type: 'demographics',
@@ -1167,6 +1182,21 @@ ${rendered}
         attribution: '&copy; OpenStreetMap contributors', maxZoom: 18
       }).addTo(map);
 
+      // Isochrone polygon FIRST (renders below pins so they stay hoverable)
+      if (mapData.isochrone?.features) {
+        L.geoJSON(mapData.isochrone, {
+          style: { fillColor: '#2EA84A', fillOpacity: 0.12, color: '#2EA84A', weight: 1.5 },
+          interactive: false  // never steal hover/click from pins above
+        }).addTo(map);
+      }
+
+      // Competitors FIRST (red) — rendered below BH pins
+      for (const comp of (mapData.competitors || [])) {
+        L.circleMarker([comp.lat, comp.lng], {
+          radius: 6, fillColor: '#ef4444', color: '#991b1b', weight: 1.5, fillOpacity: 0.8
+        }).addTo(map).bindPopup(`<b style="color:#ef4444">${comp.name}</b><br>${comp.rating ? comp.rating + ' stars | ' + comp.reviews + ' reviews' : ''}<br><small>${comp.address || ''}</small>`);
+      }
+
       // Origin marker (gold)
       if (mapData.origin) {
         L.circleMarker([mapData.origin.lat, mapData.origin.lng], {
@@ -1174,25 +1204,11 @@ ${rendered}
         }).addTo(map).bindPopup(`<b>Origin</b><br>${mapData.origin.label || ''}`);
       }
 
-      // BH locations (green)
+      // BH locations LAST (green) — always on top
       for (const loc of (mapData.bhLocations || [])) {
         L.circleMarker([loc.lat, loc.lng], {
           radius: 7, fillColor: '#2EA84A', color: '#1a6b2e', weight: 1.5, fillOpacity: 0.85
         }).addTo(map).bindPopup(`<b style="color:#2EA84A">BH:</b> ${loc.name}<br><small>${loc.address || ''}</small>`);
-      }
-
-      // Competitors (red)
-      for (const comp of (mapData.competitors || [])) {
-        L.circleMarker([comp.lat, comp.lng], {
-          radius: 6, fillColor: '#ef4444', color: '#991b1b', weight: 1.5, fillOpacity: 0.8
-        }).addTo(map).bindPopup(`<b style="color:#ef4444">${comp.name}</b><br>${comp.rating ? comp.rating + ' stars | ' + comp.reviews + ' reviews' : ''}<br><small>${comp.address || ''}</small>`);
-      }
-
-      // Isochrone polygon (green translucent)
-      if (mapData.isochrone?.features) {
-        L.geoJSON(mapData.isochrone, {
-          style: { fillColor: '#2EA84A', fillOpacity: 0.12, color: '#2EA84A', weight: 1.5 }
-        }).addTo(map);
       }
 
       // Fit bounds to all markers
@@ -1210,6 +1226,168 @@ ${rendered}
       console.warn('[Map] Render failed:', e.message);
     }
   }
+  // ── Choropleth Heat Map Rendering ─────────────────────────────────────────
+  // 5-level BH brand ramp: Turquoise → Mint → Green
+  const CHOROPLETH_COLORS = ['#59BEC9', '#6AD2B4', '#7DE69B', '#56C773', '#2EA84A'];
+  const CHOROPLETH_NO_DATA = '#E5E7EB';
+
+  function getChoroplethColor(value, breaks) {
+    if (value == null || isNaN(value)) return CHOROPLETH_NO_DATA;
+    if (value <= breaks[0]) return CHOROPLETH_COLORS[0];
+    if (value <= breaks[1]) return CHOROPLETH_COLORS[1];
+    if (value <= breaks[2]) return CHOROPLETH_COLORS[2];
+    if (value <= breaks[3]) return CHOROPLETH_COLORS[3];
+    return CHOROPLETH_COLORS[4];
+  }
+
+  function getBenchmarkNote(value, benchmarks) {
+    if (!benchmarks) return '';
+    if (value >= benchmarks.p90) return `Top 10% for South Florida (p90=${benchmarks.p90})`;
+    if (value <= benchmarks.p10) return `Bottom 10% for South Florida (p10=${benchmarks.p10})`;
+    if (value >= benchmarks.p75) return `Above average (p75=${benchmarks.p75})`;
+    if (value <= benchmarks.p25) return `Below average (p25=${benchmarks.p25})`;
+    return `Near median (p50=${benchmarks.p50})`;
+  }
+
+  async function renderChoropleth(data) {
+    if (!data?.zipData || Object.keys(data.zipData).length === 0) return;
+    try {
+      const container = document.createElement('div');
+      container.className = 'map-wrap';
+      const mapId = 'choropleth-' + Date.now();
+
+      const toggle = document.createElement('button');
+      toggle.className = 'map-toggle';
+      toggle.textContent = 'Hide heat map';
+      toggle.addEventListener('click', () => {
+        const mc = document.getElementById(mapId);
+        if (mc.style.display === 'none') { mc.style.display = 'block'; toggle.textContent = 'Hide heat map'; }
+        else { mc.style.display = 'none'; toggle.textContent = 'Show heat map'; }
+      });
+
+      const mapDiv = document.createElement('div');
+      mapDiv.id = mapId;
+      mapDiv.className = 'map-container';
+      mapDiv.style.height = '500px';
+      container.append(toggle, mapDiv);
+      messagesEl.appendChild(container);
+
+      // Center on South Florida
+      const map = L.map(mapId).setView([26.1, -80.2], 10);
+
+      // CartoDB Positron — light/muted base tiles so choropleth pops
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; OpenStreetMap &copy; CARTO', maxZoom: 18, subdomains: 'abcd'
+      }).addTo(map);
+
+      // Fetch ZCTA GeoJSON (cached after first load)
+      if (!window._zctaGeoJSON) {
+        const resp = await fetch('/api/zcta-geojson');
+        if (!resp.ok) { console.warn('[Choropleth] GeoJSON not available'); return; }
+        window._zctaGeoJSON = await resp.json();
+      }
+
+      const breaks = data.breaks || [data.domain[0], data.domain[0], data.domain[1], data.domain[1]];
+
+      // Render ZIP polygons
+      const choroplethLayer = L.geoJSON(window._zctaGeoJSON, {
+        filter: (feature) => {
+          const zip = feature.properties.ZCTA5CE20;
+          return data.zipData[zip] !== undefined;
+        },
+        style: (feature) => {
+          const zip = feature.properties.ZCTA5CE20;
+          const val = data.zipData[zip]?.value;
+          return {
+            fillColor: getChoroplethColor(val, breaks),
+            fillOpacity: 0.65,
+            color: '#25282A',
+            weight: 0.8,
+            opacity: 0.4
+          };
+        },
+        onEachFeature: (feature, layer) => {
+          const zip = feature.properties.ZCTA5CE20;
+          const d = data.zipData[zip];
+          if (!d) return;
+
+          const benchNote = getBenchmarkNote(d.value, data.benchmarks);
+          const isPercent = data.label.includes('%') || data.label.toLowerCase().includes('rate');
+          const valStr = isPercent ? d.value.toFixed(1) + '%' : d.value.toLocaleString();
+
+          layer.bindPopup(`
+            <div style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;min-width:180px">
+              <div style="font-weight:700;font-size:14px;color:#25282A">ZIP ${zip}</div>
+              <div style="font-size:22px;font-weight:800;color:#2EA84A;margin:4px 0">${valStr}</div>
+              <div style="font-size:12px;color:#6b7280">${data.label}</div>
+              ${d.ci_low != null ? `<div style="font-size:11px;color:#9ca3af">CI: ${d.ci_low}% – ${d.ci_high}%</div>` : ''}
+              ${benchNote ? `<div style="margin-top:6px;padding-top:6px;border-top:1px solid #e5e7eb;font-size:11px;color:#6b7280">${benchNote}</div>` : ''}
+            </div>
+          `);
+
+          layer.on('mouseover', () => {
+            layer.setStyle({ weight: 2.5, color: '#2EA84A', fillOpacity: 0.85 });
+            layer.bringToFront();
+          });
+          layer.on('mouseout', () => choroplethLayer.resetStyle(layer));
+        }
+      }).addTo(map);
+
+      // Overlay BH location pins on top
+      for (const loc of (data.bhLocations || [])) {
+        L.circleMarker([loc.lat, loc.lng], {
+          radius: 7, fillColor: '#2EA84A', color: '#1a6b2e', weight: 1.5, fillOpacity: 0.85
+        }).addTo(map).bindPopup(`<b style="color:#2EA84A">BH:</b> ${loc.name}<br><small>${loc.address || ''}</small>`);
+      }
+
+      // Overlay competitor pins on top
+      for (const comp of (data.competitors || [])) {
+        L.circleMarker([comp.lat, comp.lng], {
+          radius: 6, fillColor: '#ef4444', color: '#991b1b', weight: 1.5, fillOpacity: 0.8
+        }).addTo(map).bindPopup(`<b style="color:#ef4444">${comp.name}</b><br>${comp.rating ? comp.rating + ' stars | ' + comp.reviews + ' reviews' : ''}<br><small>${comp.address || ''}</small>`);
+      }
+
+      // Fit to 4-county POA bounds (Monroe, Miami-Dade, Broward, Palm Beach)
+      // Tight bounds that show all 4 counties without excessive empty space
+      const poaBounds = [[24.4, -80.9], [26.95, -79.95]];
+      map.fitBounds(poaBounds, { padding: [10, 10] });
+
+      // Legend
+      const legend = L.control({ position: 'bottomright' });
+      legend.onAdd = function () {
+        const div = L.DomUtil.create('div', 'choropleth-legend');
+        const rangeLabels = [
+          `≤ ${breaks[0].toFixed(1)}`,
+          `${breaks[0].toFixed(1)} – ${breaks[1].toFixed(1)}`,
+          `${breaks[1].toFixed(1)} – ${breaks[2].toFixed(1)}`,
+          `${breaks[2].toFixed(1)} – ${breaks[3].toFixed(1)}`,
+          `> ${breaks[3].toFixed(1)}`
+        ];
+        let legendHtml = `<div style="background:white;padding:10px 14px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.15);font-family:-apple-system,BlinkMacSystemFont,sans-serif">`;
+        legendHtml += `<div style="font-weight:700;font-size:12px;color:#25282A;margin-bottom:8px">${data.label}</div>`;
+        for (let i = 0; i < 5; i++) {
+          legendHtml += `<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">`;
+          legendHtml += `<div style="width:18px;height:14px;border-radius:2px;background:${CHOROPLETH_COLORS[i]};border:1px solid rgba(0,0,0,0.1)"></div>`;
+          legendHtml += `<span style="font-size:11px;color:#4b5563">${rangeLabels[i]}</span>`;
+          legendHtml += `</div>`;
+        }
+        legendHtml += `<div style="display:flex;align-items:center;gap:6px;margin-top:4px;padding-top:4px;border-top:1px solid #e5e7eb">`;
+        legendHtml += `<div style="width:18px;height:14px;border-radius:2px;background:${CHOROPLETH_NO_DATA};border:1px solid rgba(0,0,0,0.1)"></div>`;
+        legendHtml += `<span style="font-size:11px;color:#9ca3af">No data</span>`;
+        legendHtml += `</div></div>`;
+        div.innerHTML = legendHtml;
+        return div;
+      };
+      legend.addTo(map);
+
+      // Fix rendering
+      setTimeout(() => { map.invalidateSize(); }, 200);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    } catch (e) {
+      console.warn('[Choropleth] Render failed:', e.message);
+    }
+  }
+
 </script>
 </body>
 </html>

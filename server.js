@@ -343,7 +343,7 @@ const tools = [
       properties: {
         filter: {
           type: 'string',
-          description: 'URL-encoded Yext filter JSON. Single keyword: %7B%22name%22%3A%7B%22%24contains%22%3A%22KEYWORD%22%7D%2C%22closed%22%3A%7B%22%24eq%22%3Afalse%7D%7D — KEYWORD examples: Primary%2BCare, Imaging, Orthop, Cardio, Cancer, Neuro, Surgery. For urgent/same-day (one category): %7B%22%24or%22%3A%5B%7B%22name%22%3A%7B%22%24contains%22%3A%22Urgent%2BCare%22%7D%7D%2C%7B%22name%22%3A%7B%22%24contains%22%3A%22Same-Day%2BCare%22%7D%7D%5D%2C%22closed%22%3A%7B%22%24eq%22%3Afalse%7D%7D'
+          description: 'URL-encoded Yext filter JSON. Single keyword: %7B%22name%22%3A%7B%22%24contains%22%3A%22KEYWORD%22%7D%2C%22closed%22%3A%7B%22%24eq%22%3Afalse%7D%7D — KEYWORD examples: Primary%2BCare, Imaging, Orthop, Cardio, Cancer, Neuro, Surgery. For same-day care (FULL category — includes urgent care, express, emergency/ER): %7B%22%24or%22%3A%5B%7B%22name%22%3A%7B%22%24contains%22%3A%22Urgent%2BCare%22%7D%7D%2C%7B%22name%22%3A%7B%22%24contains%22%3A%22Same-Day%2BCare%22%7D%7D%2C%7B%22name%22%3A%7B%22%24contains%22%3A%22Emergency%22%7D%7D%2C%7B%22name%22%3A%7B%22%24contains%22%3A%22Express%22%7D%7D%5D%2C%22closed%22%3A%7B%22%24eq%22%3Afalse%7D%7D'
         }
       },
       required: ['filter']
@@ -421,14 +421,16 @@ const tools = [
   },
   {
     name: 'drive_time_isochrone',
-    description: 'OpenRouteService API. Generates drive-time polygons as GeoJSON. Coordinates are [longitude, latitude] (NOT lat,lon). Range in seconds: 300=5min, 600=10min, 900=15min, 1200=20min. Max 3 ranges per call.',
+    description: 'Generates drive-time polygon zones as GeoJSON. Pass EITHER lat/lng coordinates OR an address — the server handles geocoding and coordinate formatting automatically. Range in seconds: 300=5min, 600=10min, 900=15min, 1200=20min. Max 3 ranges per call.',
     input_schema: {
       type: 'object',
       properties: {
-        locations: { type: 'array', description: 'Array of [longitude, latitude] coordinate pairs.', items: { type: 'array', items: { type: 'number' } } },
+        lat: { type: 'number', description: 'Latitude of the origin point. Use this with lng OR use address instead.' },
+        lng: { type: 'number', description: 'Longitude of the origin point. Use this with lat OR use address instead.' },
+        address: { type: 'string', description: 'Address to generate isochrone from. Server will geocode automatically. Use this OR lat/lng.' },
         range: { type: 'array', description: 'Array of range values in seconds.', items: { type: 'number' } }
       },
-      required: ['locations', 'range']
+      required: ['range']
     }
   },
   {
@@ -464,6 +466,28 @@ const tools = [
       },
       required: []
     }
+  },
+  {
+    name: 'generate_choropleth_map',
+    description: 'Generates a ZIP code choropleth (heat map) for South Florida. Colors ZIP polygons by a chosen metric. Use when the user asks to "map," "show," "visualize," or "heat map" a metric across ZIPs or South Florida. Supports CDC health measures and demographic metrics. Returns top/bottom 5 ZIPs — the interactive map renders automatically in the UI.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        metric: {
+          type: 'string',
+          description: 'Metric code to map. CDC measures: ACCESS2, ARTHRITIS, BINGE, BPHIGH, CANCER, CASTHMA, CHD, CHECKUP, CHOLSCREEN, COPD, CSMOKING, DENTAL, DEPRESSION, DIABETES, DISABILITY, GHLTH, HIGHCHOL, LPA, MAMMOUSE, MHLTH, OBESITY, PHLTH, SLEEP, STROKE, TEETHLOST, VISION. Payer mix: COMMERCIAL_PCT, PUBLIC_INS_PCT, UNINSURED_PCT, PRIVATE_18_64_PCT, UNINS_18_64_PCT. Population: TOTAL_POP, MALE_PCT, FEMALE_PCT, MEDIAN_AGE, AGE_18_PLUS_PCT, AGE_65_PLUS_PCT, AGE_UNDER5_PCT through AGE_85_PLUS_PCT. Race/Language: HISPANIC_PCT, WHITE_PCT, BLACK_PCT, ASIAN_PCT, SPANISH_HOME_PCT. Income: MEDIAN_INCOME, MEAN_INCOME, PER_CAPITA_INCOME, POVERTY_PCT. Education: BACHELOR_PLUS_PCT. Housing: OWNER_OCCUPIED_PCT, RENTER_PCT, MEDIAN_HOME_VALUE. Other: DISABILITY_PCT, UNEMPLOYMENT_PCT, FOREIGN_BORN_PCT.'
+        },
+        label: {
+          type: 'string',
+          description: 'Human-readable label for the legend (e.g., "Diabetes Rate (%)", "Commercial Insurance %").'
+        },
+        zip_codes: {
+          type: 'string',
+          description: 'Optional. Comma-separated ZIPs to highlight. If omitted, maps all 195 South Florida ZIPs.'
+        }
+      },
+      required: ['metric', 'label']
+    }
   }
 ];
 
@@ -485,6 +509,19 @@ try {
 } catch (err) {
   console.warn('  One Medical: data file not found');
 }
+
+// ── ZCTA GeoJSON (ZIP boundaries for choropleth maps) ─────────────────────
+const ZCTA_GEOJSON_PATH = path.join(__dirname, 'data', 'zcta-south-florida.geojson');
+let zctaGeoJSON = null;
+try {
+  zctaGeoJSON = JSON.parse(fs.readFileSync(ZCTA_GEOJSON_PATH, 'utf8'));
+  console.log(`  ZCTA GeoJSON: ${zctaGeoJSON.features?.length || 0} ZIP boundaries loaded`);
+} catch (err) {
+  console.warn('  ZCTA GeoJSON: not found — run "node scripts/build-zcta-geojson.js" to generate');
+}
+
+// ZIPs in CDC data but outside the 4-county POA (Monroe, Miami-Dade, Broward, Palm Beach)
+const POA_EXCLUDED_ZIPS = new Set(['33440', '33455', '33458', '33469', '33471', '33478']);
 
 // ── Census Cache ───────────────────────────────────────────────────────────
 // Census ACS data changes once a year. Cache successful responses to survive
@@ -552,6 +589,93 @@ if (Object.keys(CDC_BENCHMARKS).length > 0) {
   REF_PROMPT += bLines.join('\n');
 }
 
+// ── Demographic Index (for choropleth maps) ───────────────────────────────
+// Parse Census cache to build per-ZIP demographic metrics for instant choropleth rendering
+const CENSUS_VAR_MAP = {
+  // Payer mix
+  'DP03_0096PE': 'INSURED_PCT',
+  'DP03_0097E':  'COMMERCIAL_COUNT',    'DP03_0097PE': 'COMMERCIAL_PCT',
+  'DP03_0098E':  'PUBLIC_INS_COUNT',    'DP03_0098PE': 'PUBLIC_INS_PCT',
+  'DP03_0099E':  'UNINSURED_COUNT',     'DP03_0099PE': 'UNINSURED_PCT',
+  'DP03_0101PE': 'INS_UNDER19_PCT',     'DP03_0102PE': 'UNINS_UNDER19_PCT',
+  'DP03_0104PE': 'PRIVATE_18_64_PCT',   'DP03_0105PE': 'PUBLIC_18_64_PCT',
+  'DP03_0106PE': 'UNINS_18_64_PCT',
+  'S2704_C02_002E': 'MEDICARE_COUNT',   'S2704_C02_003E': 'EMPLOYER_INS_COUNT',
+  'S2704_C02_004E': 'DIRECT_PURCHASE_COUNT', 'S2704_C02_006E': 'MEDICAID_COUNT',
+  // Population & sex
+  'DP05_0001E': 'TOTAL_POP',
+  'DP05_0002E': 'MALE_COUNT',           'DP05_0002PE': 'MALE_PCT',
+  'DP05_0003E': 'FEMALE_COUNT',         'DP05_0003PE': 'FEMALE_PCT',
+  // Age brackets (counts)
+  'DP05_0005E': 'AGE_UNDER5',           'DP05_0006E': 'AGE_5_9',
+  'DP05_0007E': 'AGE_10_14',            'DP05_0008E': 'AGE_15_19',
+  'DP05_0009E': 'AGE_20_24',            'DP05_0010E': 'AGE_25_34',
+  'DP05_0011E': 'AGE_35_44',            'DP05_0012E': 'AGE_45_54',
+  'DP05_0013E': 'AGE_55_59',            'DP05_0014E': 'AGE_60_64',
+  'DP05_0015E': 'AGE_65_74',            'DP05_0016E': 'AGE_75_84',
+  'DP05_0017E': 'AGE_85_PLUS',
+  // Age bracket percentages
+  'DP05_0005PE': 'AGE_UNDER5_PCT',      'DP05_0006PE': 'AGE_5_9_PCT',
+  'DP05_0007PE': 'AGE_10_14_PCT',       'DP05_0008PE': 'AGE_15_19_PCT',
+  'DP05_0009PE': 'AGE_20_24_PCT',       'DP05_0010PE': 'AGE_25_34_PCT',
+  'DP05_0011PE': 'AGE_35_44_PCT',       'DP05_0012PE': 'AGE_45_54_PCT',
+  'DP05_0013PE': 'AGE_55_59_PCT',       'DP05_0014PE': 'AGE_60_64_PCT',
+  'DP05_0015PE': 'AGE_65_74_PCT',       'DP05_0016PE': 'AGE_75_84_PCT',
+  'DP05_0017PE': 'AGE_85_PLUS_PCT',
+  // Key age groups
+  'DP05_0018E': 'MEDIAN_AGE',
+  'DP05_0021E': 'AGE_18_PLUS',          'DP05_0021PE': 'AGE_18_PLUS_PCT',
+  'DP05_0024E': 'AGE_65_PLUS',          'DP05_0024PE': 'AGE_65_PLUS_PCT',
+  // Race & ethnicity
+  'DP05_0071E': 'HISPANIC_COUNT',       'DP05_0071PE': 'HISPANIC_PCT',
+  'DP05_0077PE': 'WHITE_PCT',           'DP05_0078PE': 'BLACK_PCT',
+  'DP05_0080PE': 'ASIAN_PCT',           'DP05_0082PE': 'TWO_PLUS_RACES_PCT',
+  // Language
+  'DP02_0113PE': 'OTHER_LANG_HOME_PCT', 'DP02_0116PE': 'SPANISH_HOME_PCT',
+  // Income
+  'DP03_0062E': 'MEDIAN_INCOME',        'DP03_0063E': 'MEAN_INCOME',
+  'DP03_0088E': 'PER_CAPITA_INCOME',
+  // Education
+  'DP02_0067PE': 'SOME_COLLEGE_PCT',    'DP02_0068PE': 'BACHELOR_PLUS_PCT',
+  // Employment
+  'DP03_0004PE': 'EMPLOYMENT_RATE',     'DP03_0005PE': 'UNEMPLOYMENT_PCT',
+  // Poverty
+  'DP03_0119PE': 'POVERTY_PCT',
+  // Housing
+  'DP02_0001E': 'HOUSEHOLDS',           'DP02_0002E': 'FAMILIES',
+  'DP04_0046PE': 'OWNER_OCCUPIED_PCT',  'DP04_0047PE': 'RENTER_PCT',
+  'DP04_0089E': 'MEDIAN_HOME_VALUE',    'DP04_0134E': 'MEDIAN_RENT',
+  // Other
+  'DP02_0072PE': 'DISABILITY_PCT',      'DP02_0071E': 'VETERANS',
+  'DP02_0096PE': 'FOREIGN_BORN_PCT',
+  'DP04_0058PE': 'NO_VEHICLE_PCT',      'DP02_0153PE': 'INTERNET_PCT',
+};
+
+function buildDemographicIndex(cache) {
+  const index = {};
+  for (const [key, entry] of Object.entries(cache)) {
+    if (!entry?.data || !Array.isArray(entry.data) || entry.data.length < 2) continue;
+    const headers = entry.data[0];
+    for (let i = 1; i < entry.data.length; i++) {
+      const row = entry.data[i];
+      const zipIdx = headers.indexOf('zip code tabulation area');
+      if (zipIdx === -1) continue;
+      const zip = row[zipIdx];
+      if (!zip || !cdcPlacesData[zip]) continue; // only our 195 ZIPs
+      if (!index[zip]) index[zip] = {};
+      for (let j = 0; j < headers.length; j++) {
+        const metricName = CENSUS_VAR_MAP[headers[j]];
+        if (!metricName) continue;
+        const v = parseFloat(row[j]);
+        if (!isNaN(v)) index[zip][metricName] = v;
+      }
+    }
+  }
+  return index;
+}
+const demographicIndex = buildDemographicIndex(censusCache);
+console.log(`  Demographic index: ${Object.keys(demographicIndex).length} ZIPs with Census metrics`);
+
 // ── Tool Executors ──────────────────────────────────────────────────────────
 
 async function fetchWithTimeout(url, options = {}, timeoutMs = 30000) {
@@ -578,6 +702,39 @@ function haversineDistance(lat1, lon1, lat2, lon2) {
   const dLon = (lon2 - lon1) * Math.PI / 180;
   const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// ── Point-in-Polygon (ray casting) ────────────────────────────────────────
+// Used to filter map pins to only those inside an isochrone polygon
+function pointInPolygon(lat, lng, polygon) {
+  // polygon is an array of [lng, lat] coordinate rings
+  let inside = false;
+  for (let ring = 0; ring < polygon.length; ring++) {
+    const coords = polygon[ring];
+    for (let i = 0, j = coords.length - 1; i < coords.length; j = i++) {
+      const xi = coords[i][1], yi = coords[i][0]; // [lng, lat] → lat, lng
+      const xj = coords[j][1], yj = coords[j][0];
+      if (((yi > lng) !== (yj > lng)) && (lat < (xj - xi) * (lng - yi) / (yj - yi) + xi)) {
+        inside = !inside;
+      }
+    }
+  }
+  return inside;
+}
+
+function pointInIsochrone(lat, lng, isochrone) {
+  if (!isochrone?.features) return false;
+  for (const feature of isochrone.features) {
+    const geom = feature.geometry;
+    if (geom.type === 'Polygon') {
+      if (pointInPolygon(lat, lng, geom.coordinates)) return true;
+    } else if (geom.type === 'MultiPolygon') {
+      for (const poly of geom.coordinates) {
+        if (pointInPolygon(lat, lng, poly)) return true;
+      }
+    }
+  }
+  return false;
 }
 
 // ── ENVELOPE: structured status, warnings, metadata ────────────────────────
@@ -883,16 +1040,59 @@ async function executeTool(name, input) {
       }
 
       case 'drive_time_isochrone': {
+        // Smart coordinate handling: accept address, lat/lng, or legacy [lng,lat] format
+        let isoLat, isoLng;
+
+        if (input.address) {
+          // Geocode the address
+          const geoUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(input.address)}&key=${process.env.GOOGLE_MAPS_API_KEY}`;
+          const geoRes = await fetchWithTimeout(geoUrl);
+          const geoData = await geoRes.json();
+          if (geoData.results?.[0]?.geometry?.location) {
+            isoLat = geoData.results[0].geometry.location.lat;
+            isoLng = geoData.results[0].geometry.location.lng;
+            // Store origin so map filtering and Yext distance pre-filter work
+            executeTool._originCoords = { lat: isoLat, lng: isoLng };
+            console.log(`[Isochrone] Geocoded "${input.address}" → ${isoLat}, ${isoLng}`);
+            console.log(`[Geocode] Origin stored: ${isoLat}, ${isoLng}`);
+          } else {
+            return envelope('Isochrone', 'geocode-failed', timestamp, { error: `Could not geocode: ${input.address}` });
+          }
+        } else if (input.lat != null && input.lng != null) {
+          isoLat = input.lat;
+          isoLng = input.lng;
+          executeTool._originCoords = { lat: isoLat, lng: isoLng };
+          isoLng = input.lng;
+        } else if (input.locations?.[0]) {
+          // Legacy format: [[lng, lat]] — accept it but normalize
+          isoLng = input.locations[0][0];
+          isoLat = input.locations[0][1];
+          // Detect if agent swapped lat/lng (lat should be 24-27 for South Florida)
+          if (isoLat < -70 && isoLng > 20 && isoLng < 30) {
+            console.log(`[Isochrone] Detected swapped coordinates, fixing: [${isoLng}, ${isoLat}] → [${isoLat}, ${isoLng}]`);
+            [isoLat, isoLng] = [isoLng, isoLat];
+          }
+        } else if (executeTool._originCoords) {
+          // Fall back to previously geocoded origin
+          isoLat = executeTool._originCoords.lat;
+          isoLng = executeTool._originCoords.lng;
+          console.log(`[Isochrone] Using stored origin: ${isoLat}, ${isoLng}`);
+        } else {
+          return envelope('Isochrone', 'no-location', timestamp, { error: 'No location provided. Pass address, lat/lng, or geocode first.' });
+        }
+
+        // ORS requires [longitude, latitude] — server handles the swap
+        const orsLocations = [[isoLng, isoLat]];
         url = 'https://api.openrouteservice.org/v2/isochrones/driving-car';
         source = 'OpenRouteService Isochrone API';
         res = await fetchWithTimeout(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': process.env.ORS_API_KEY },
-          body: JSON.stringify({ locations: input.locations, range: input.range, range_type: 'time' })
+          body: JSON.stringify({ locations: orsLocations, range: input.range, range_type: 'time' })
         });
         data = await res.json();
         return envelope(source, url, timestamp, data, {
-          query: { locations: input.locations, range: input.range }
+          query: { lat: isoLat, lng: isoLng, range: input.range }
         });
       }
 
@@ -990,6 +1190,79 @@ async function executeTool(name, input) {
         }, { query: { city: input.city, county: input.county } });
       }
 
+      case 'generate_choropleth_map': {
+        const metric = input.metric;
+        const targetZips = input.zip_codes
+          ? input.zip_codes.split(',').map(z => z.trim())
+          : Object.keys(cdcPlacesData).filter(z => !POA_EXCLUDED_ZIPS.has(z));
+
+        const zipData = {};
+        const values = [];
+        const allDemoMetrics = new Set(Object.values(CENSUS_VAR_MAP));
+        const isCDC = !allDemoMetrics.has(metric);
+
+        for (const zip of targetZips) {
+          let val = null;
+          if (isCDC) {
+            val = parseFloat(cdcPlacesData[zip]?.measures?.[metric]?.value);
+            const entry = cdcPlacesData[zip]?.measures?.[metric];
+            if (!isNaN(val)) {
+              zipData[zip] = { value: val };
+              if (entry?.ci_low != null) zipData[zip].ci_low = parseFloat(entry.ci_low);
+              if (entry?.ci_high != null) zipData[zip].ci_high = parseFloat(entry.ci_high);
+              values.push(val);
+            }
+          } else {
+            val = demographicIndex[zip]?.[metric];
+            if (val != null && !isNaN(val)) {
+              zipData[zip] = { value: val };
+              values.push(val);
+            }
+          }
+        }
+
+        if (values.length === 0) {
+          return envelope('Choropleth Map', 'local', timestamp, { error: `No data found for metric "${metric}"` });
+        }
+
+        values.sort((a, b) => a - b);
+        const min = values[0];
+        const max = values[values.length - 1];
+
+        // Compute quantile breaks (5 levels)
+        const breaks = [
+          values[Math.floor(values.length * 0.2)],
+          values[Math.floor(values.length * 0.4)],
+          values[Math.floor(values.length * 0.6)],
+          values[Math.floor(values.length * 0.8)]
+        ];
+
+        // Get benchmarks if CDC metric
+        const benchmarks = isCDC && CDC_BENCHMARKS[metric] ? CDC_BENCHMARKS[metric] : null;
+
+        // Top 5 and bottom 5 for the agent summary
+        const sorted = Object.entries(zipData).sort((a, b) => b[1].value - a[1].value);
+        const top5 = sorted.slice(0, 5).map(([zip, d]) => ({ zip, value: d.value }));
+        const bottom5 = sorted.slice(-5).reverse().map(([zip, d]) => ({ zip, value: d.value }));
+
+        // Store choropleth payload for SSE emission (handled by accumulator)
+        const choroplethPayload = {
+          metric, label: input.label,
+          domain: [min, max], breaks, benchmarks,
+          zipData
+        };
+
+        // Attach to the result so accumulateChoropleth can pick it up
+        const result = envelope('Choropleth Map', 'local', timestamp, {
+          metric, label: input.label,
+          zip_count: Object.keys(zipData).length,
+          domain: [min, max], top5, bottom5,
+          note: 'Interactive heat map rendered in UI. Summarize the geographic patterns you see in the top/bottom ZIPs.'
+        });
+        result._choropleth = choroplethPayload;
+        return result;
+      }
+
       default:
         return envelope('Unknown', 'N/A', timestamp, { error: `Unknown tool: ${name}` });
     }
@@ -1033,6 +1306,7 @@ function humanizeToolCall(toolName, input) {
     'drive_time_isochrone': 'Generating drive-time polygon',
     'google_reviews_deep_pull': 'Pulling Google reviews',
     'one_medical_location_lookup': 'Checking One Medical locations',
+    'generate_choropleth_map': 'Generating heat map',
   };
   if (labels[toolName]) return labels[toolName];
   if (toolName === 'baptist_health_location_lookup') {
@@ -1121,7 +1395,7 @@ async function runAgentLoop(sessionId, userMessage, res) {
   let totalSteps = 0;
 
   // Geo data accumulator for map rendering
-  const runGeo = { origin: null, bhLocations: [], competitors: [], isochrone: null };
+  const runGeo = { origin: null, bhLocations: [], competitors: [], isochrone: null, choropleth: null };
 
   while (iterations < MAX_ITERATIONS) {
     iterations++;
@@ -1193,6 +1467,12 @@ async function runAgentLoop(sessionId, userMessage, res) {
       // Accumulate geo data for potential map rendering
       accumulateGeoData(runGeo, toolCall.name, result);
 
+      // Accumulate choropleth data if this was a heat map tool call
+      if (toolCall.name === 'generate_choropleth_map' && result._choropleth) {
+        runGeo.choropleth = result._choropleth;
+        delete result._choropleth; // don't send the full payload to the model
+      }
+
       // SQLite: log tool call
       insertToolCall.run(
         runId, toolCall.name, JSON.stringify(toolCall.input),
@@ -1230,26 +1510,73 @@ async function runAgentLoop(sessionId, userMessage, res) {
   console.log(`[Evidence] BH searched: [${evidence.bhServiceLinesSearched.join(', ')}] | Competitors: ${evidence.competitorSearches.length} searches | Geocode: ${evidence.geocodeDone} | Census: ${evidence.censusDone} | CDC: ${evidence.cdcDone}`);
 
   // Send map data if geo data was collected AND user asked for a map or isochrone was called
-  const wantsMap = /map\s*(this|these|it|them|all|bh)|show.*map|plot.*map|map.*location|visuali|^map\b/i.test(userMessage);
+  const wantsMap = /map\s*(this|these|it|them|all|bh)|show.*map|plot.*map|map.*location|visuali|^map\b|a\s+map|the\s+map|provide.*map|complete.*map|include.*map/i.test(userMessage);
   // Fallback: if accumulateGeoData missed the origin, use executeTool._originCoords
   if (!runGeo.origin && executeTool._originCoords) {
     runGeo.origin = { lat: executeTool._originCoords.lat, lng: executeTool._originCoords.lng, label: 'Origin' };
   }
   const hasGeoData = runGeo.origin || runGeo.bhLocations.length > 0 || runGeo.competitors.length > 0;
+  console.log(`[Map] Pre-filter: ${runGeo.bhLocations.length} BH, ${runGeo.competitors.length} comp, isochrone=${!!runGeo.isochrone} (${runGeo.isochrone?.features?.length || 0} features), wantsMap=${wantsMap}`);
   if (hasGeoData && (wantsMap || runGeo.isochrone)) {
-    // Filter map pins to only show locations near the origin (within 15 miles)
+    // Filter map pins: use isochrone polygon if available, otherwise use distance radius
+    // Match miles but NOT minutes — "within 15 minute" should NOT match as 15 miles
+    const radiusMatch = userMessage.match(/(?:within|around|inside)\s+(?:a\s+)?(\d+(?:\.\d+)?)\s*(?:-?\s*)?mile/i)
+      || userMessage.match(/(\d+(?:\.\d+)?)\s*(?:-?\s*)?mile\s*(?:radius|area|range|of)/i);
+    // "near" = 5mi default; "within/inside" with no distance = use isochrone or 10mi
+    const isNearQuery = /\bnear\b/i.test(userMessage) && !radiusMatch;
     let bhFiltered = runGeo.bhLocations;
     let compFiltered = runGeo.competitors;
-    if (runGeo.origin) {
-      const mapRadius = 10; // miles — only show nearby on map
+
+    if (runGeo.isochrone && runGeo.isochrone.features?.length > 0) {
+      // ISOCHRONE EXISTS: filter pins to only those INSIDE the polygon
+      bhFiltered = runGeo.bhLocations.filter(l => pointInIsochrone(l.lat, l.lng, runGeo.isochrone));
+      compFiltered = runGeo.competitors.filter(c => pointInIsochrone(c.lat, c.lng, runGeo.isochrone));
+      console.log(`[Map] Isochrone filter: ${runGeo.bhLocations.length} BH → ${bhFiltered.length} inside | ${runGeo.competitors.length} comp → ${compFiltered.length} inside`);
+    } else if (runGeo.origin) {
+      // NO ISOCHRONE: use distance radius
+      // "near" = 5mi, explicit miles = user value, default = 10mi
+      const mapRadius = radiusMatch ? parseFloat(radiusMatch[1]) : (isNearQuery ? 5 : 10);
       bhFiltered = runGeo.bhLocations.filter(l =>
         haversineDistance(runGeo.origin.lat, runGeo.origin.lng, l.lat, l.lng) <= mapRadius
       );
       compFiltered = runGeo.competitors.filter(c =>
         haversineDistance(runGeo.origin.lat, runGeo.origin.lng, c.lat, c.lng) <= mapRadius
       );
-      console.log(`[Map] Filtered: ${runGeo.bhLocations.length} BH → ${bhFiltered.length} nearby | ${runGeo.competitors.length} comp → ${compFiltered.length} nearby (${mapRadius}mi radius)`);
+      console.log(`[Map] Distance filter: ${runGeo.bhLocations.length} BH → ${bhFiltered.length} nearby | ${runGeo.competitors.length} comp → ${compFiltered.length} nearby (${mapRadius}mi${radiusMatch ? ' — user-specified' : isNearQuery ? ' — near default' : ' — default'})`);
     }
+    // De-duplicate: remove competitors that are actually BH locations
+    // Match by proximity (<0.1 mi = same building) or by name containing "Baptist"
+    const preDedupCount = compFiltered.length;
+    compFiltered = compFiltered.filter(c => {
+      if (/baptist|baptist health/i.test(c.name)) return false;
+      return !bhFiltered.some(b => haversineDistance(b.lat, b.lng, c.lat, c.lng) < 0.1);
+    });
+    if (preDedupCount > compFiltered.length) {
+      console.log(`[Map] De-dup: removed ${preDedupCount - compFiltered.length} competitors that are BH locations`);
+    }
+
+    // Text-match filter: only map competitors the agent actually mentioned in its response
+    // This ensures the map matches exactly what the text discusses
+    if (fullText && compFiltered.length > 0) {
+      const responseText = fullText.toLowerCase();
+      const preTextMatch = compFiltered.length;
+      compFiltered = compFiltered.filter(c => {
+        const name = c.name.toLowerCase();
+        // Check if the competitor name (or a significant portion) appears in the response
+        // Try full name first, then first two words (handles "Sanitas Medical Center" → "Sanitas")
+        if (responseText.includes(name)) return true;
+        const words = name.split(/\s+/);
+        if (words.length >= 2 && responseText.includes(words[0] + ' ' + words[1])) return true;
+        // Single distinctive word (skip generic: "urgent", "care", "medical", "center", "clinic")
+        const generic = new Set(['urgent', 'care', 'medical', 'center', 'clinic', 'health', 'hospital', 'emergency', 'florida', 'south']);
+        const distinctive = words.filter(w => w.length > 3 && !generic.has(w));
+        return distinctive.some(w => responseText.includes(w));
+      });
+      if (preTextMatch > compFiltered.length) {
+        console.log(`[Map] Text-match: kept ${compFiltered.length}/${preTextMatch} competitors mentioned in response`);
+      }
+    }
+
     const mapData = {
       center: runGeo.origin || (bhFiltered[0] ? { lat: bhFiltered[0].lat, lng: bhFiltered[0].lng } : null),
       origin: runGeo.origin,
@@ -1259,6 +1586,14 @@ async function runAgentLoop(sessionId, userMessage, res) {
     };
     sendSSE(res, 'map_data', mapData);
     console.log(`[Map] Sent: ${bhFiltered.length} BH + ${compFiltered.length} competitors${runGeo.isochrone ? ' + isochrone' : ''}`);
+  }
+
+  // Send choropleth data if heat map was generated
+  if (runGeo.choropleth) {
+    runGeo.choropleth.bhLocations = runGeo.bhLocations;
+    runGeo.choropleth.competitors = runGeo.competitors;
+    sendSSE(res, 'choropleth_data', runGeo.choropleth);
+    console.log(`[Choropleth] Sent: ${Object.keys(runGeo.choropleth.zipData).length} ZIPs, metric=${runGeo.choropleth.metric}`);
   }
 
   // Compress tool results in session history
@@ -1292,6 +1627,13 @@ app.get('/api/yext-preload', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: 'Yext preload failed' });
   }
+});
+
+// ── ZCTA GeoJSON Endpoint (ZIP boundaries for choropleth) ─────────────────
+app.get('/api/zcta-geojson', (req, res) => {
+  if (!zctaGeoJSON) return res.status(404).json({ error: 'ZCTA GeoJSON not available. Run: node scripts/build-zcta-geojson.js' });
+  res.set('Cache-Control', 'public, max-age=86400');
+  res.json(zctaGeoJSON);
 });
 
 // ── API Endpoint ────────────────────────────────────────────────────────────

@@ -13,6 +13,21 @@ Use competitor_ratings_reviews (Google Places Text Search) to find competitors.
 - Max 5 competitor locations per individual query, but run multiple queries to cover all relevant service types.
 - Returns: place_id, name, rating, user_ratings_total, formatted_address, geometry.location (USE THESE COORDS — do NOT re-geocode).
 
+IMPORTANT — DO NOT MISS THESE COMPETITOR CATEGORIES:
+
+RETAIL CLINICS (for same-day/urgent/primary care queries):
+Always search for "CVS MinuteClinic", "Walgreens healthcare clinic", "walk in clinic" in addition to "urgent care." Retail clinics are real same-day care competitors — they capture commercially insured patients with convenience and low-acuity visits.
+
+HEALTH SYSTEMS (always relevant):
+South Florida has 18 major competing health systems. When analyzing any competitive landscape, consider which systems operate in the trade area:
+- Broward Health, CHS, Cleveland Clinic Florida, HCA Florida (+ MD Now + CareSpot)
+- Holy Cross/Trinity, HSA, Jackson Health System
+- Jupiter Medical Center, Keralty/Sanitas, Lakeside/HCD PBC, Larkin
+- Memorial Healthcare System, Mount Sinai Medical Center
+- Nicklaus Children's Health System, Palm Beach Health/Tenet
+- UHealth/University of Miami, UHS
+Search by system name when you know they operate nearby (e.g., "HCA urgent care [city]", "Jackson Health [city]", "Memorial Healthcare [city]").
+
 STEP 3 — BH FOOTPRINT CHECK:
 Use baptist_health_location_lookup to check BH's existing presence across every care type relevant to the facility being analyzed. If the query mentions "multi-specialty" or lists multiple service lines, search Yext for EACH of those service lines (e.g., "Cardio," "Orthop," "Imaging," "Primary Care," "Neuro," etc.) — not just urgent care and primary care. Then calculate drive times from the target address to nearby BH locations.
 
