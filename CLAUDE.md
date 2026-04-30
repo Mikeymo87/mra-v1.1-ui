@@ -24,7 +24,7 @@ cd ~/Desktop/Claude/MRA-v1.1-UI && node server.js
 ## 9 Tools
 1. Baptist Health Location Lookup (Yext) — 396 facilities, 19 categories
 2. Census Demographics Lookup — 2024→2023 auto-fallback, max 25 vars/call
-3. Web Research (OpenAI gpt-4o web_search_preview)
+3. Web Research (Firecrawl search — returns raw results with full page markdown)
 4. Geocode Address (Google) — MUST include city name (duplicate addresses in SoFla)
 5. Calculate Drive Times (Google Distance Matrix) — flattened response, 10 destinations max per call
 6. Competitor Ratings (Google Places Text Search)

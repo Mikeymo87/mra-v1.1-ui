@@ -363,7 +363,7 @@ const tools = [
   },
   {
     name: 'web_research',
-    description: 'Live web search via OpenAI gpt-4o with web_search_preview. Use for market trends, Esri Tapestry segments, competitor news, all-provider searches. Translate non-English results to English.',
+    description: 'Live web search via Firecrawl. Use for market trends, Esri Tapestry segments, competitor news, all-provider searches. Returns search results with full page content. Translate non-English results to English.',
     input_schema: {
       type: 'object',
       properties: {
@@ -913,19 +913,31 @@ async function executeTool(name, input) {
       }
 
       case 'web_research': {
-        url = 'https://api.openai.com/v1/responses';
-        source = 'OpenAI gpt-4o web_search_preview';
+        url = 'https://api.firecrawl.dev/v1/search';
+        source = 'Firecrawl Web Search';
         res = await fetchWithTimeout(url, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}` },
-          body: JSON.stringify({ model: 'gpt-4o', tools: [{ type: 'web_search_preview' }], input: input.research_query })
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.FIRECRAWL_API_KEY}` },
+          body: JSON.stringify({
+            query: input.research_query,
+            limit: 8,
+            scrapeOptions: { formats: ['markdown'], onlyMainContent: true }
+          })
         }, 60000);
         data = await res.json();
-        const output = data.output?.filter(o => o.type === 'message')
-          .flatMap(o => o.content?.filter(c => c.type === 'output_text').map(c => c.text))
-          .join('\n') || JSON.stringify(data.output);
-        return envelope(source, 'openai.com/v1/responses', timestamp, output, {
-          query: { research_query: input.research_query }
+        if (!data.success) {
+          return envelope(source, url, timestamp, { error: data.error || 'Firecrawl search failed' }, {
+            query: { research_query: input.research_query }
+          });
+        }
+        const results = (data.data || []).map(r => ({
+          title: r.title || '',
+          url: r.url || '',
+          content: r.markdown || r.description || ''
+        }));
+        return envelope(source, 'firecrawl.dev/v1/search', timestamp, results, {
+          query: { research_query: input.research_query },
+          result_count: results.length
         });
       }
 
