@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>MRA v2.1 — Architecture Diagram</title>
+<link rel="stylesheet" href="colors_and_type.css" />
+<style>
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bh-white);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+  }
+
+  .diagram {
+    width: 820px;
+    height: 440px;
+    background: var(--bh-white);
+    box-sizing: border-box;
+    padding: 16px 24px 14px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  /* ---- Nodes ---- */
+  .node-box {
+    border: 1px solid var(--bh-ink-200);
+    padding: 6px 18px;
+    background: var(--bh-white);
+    text-align: center;
+  }
+  .node-box.accent {
+    border-color: var(--bh-green);
+    box-shadow: inset 3px 0 0 var(--bh-green);
+  }
+  .node-box h4 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 14px;
+    color: var(--bh-black);
+    margin: 0;
+    letter-spacing: -0.01em;
+    line-height: 1.2;
+  }
+  .node-box .sub {
+    font-family: var(--font-ui);
+    font-size: 10px;
+    color: var(--bh-ink-500);
+    margin: 1px 0 0;
+    line-height: 1.3;
+  }
+
+  /* Pills */
+  .pills {
+    display: flex;
+    gap: 4px;
+    justify-content: center;
+    margin-top: 4px;
+  }
+  .pill {
+    font-family: var(--font-ui);
+    font-weight: 500;
+    font-size: 8px;
+    color: var(--bh-black);
+    padding: 2px 7px;
+    border-radius: 999px;
+    border: 1px solid var(--bh-mint);
+    background: color-mix(in srgb, var(--bh-mint) 18%, transparent);
+  }
+
+  /* ---- Arrows ---- */
+  .v-arrow {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .v-arrow-line {
+    width: 1px;
+    height: 6px;
+    background: var(--bh-green);
+  }
+  .v-arrow-head {
+    width: 0; height: 0;
+    border-left: 3px solid transparent;
+    border-right: 3px solid transparent;
+    border-top: 4px solid var(--bh-green);
+  }
+  .v-arrow-label {
+    font-family: var(--font-ui);
+    font-weight: 600;
+    font-size: 7px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--bh-green);
+    margin-top: 1px;
+  }
+
+  /* ---- Tools ---- */
+  .tools-section { width: 100%; }
+  .tools-section-label {
+    font-family: var(--font-ui);
+    font-weight: 600;
+    font-size: 8px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--bh-ink-500);
+    text-align: center;
+    margin-bottom: 4px;
+  }
+  .tools-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 4px;
+  }
+  .tool {
+    border: 1px solid var(--bh-ink-200);
+    padding: 5px 2px 4px;
+    text-align: center;
+    background: var(--bh-white);
+  }
+  .tool.hl { border-color: var(--bh-green); }
+  .tool .icon { font-size: 13px; line-height: 1; }
+  .tool .name {
+    font-family: var(--font-ui);
+    font-weight: 600;
+    font-size: 8px;
+    color: var(--bh-black);
+    line-height: 1.1;
+    margin-top: 2px;
+  }
+  .tool .api {
+    font-family: var(--font-ui);
+    font-size: 7px;
+    color: var(--bh-ink-500);
+    margin-top: 1px;
+  }
+
+  /* ---- Sources ---- */
+  .sources-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 4px;
+    width: 100%;
+  }
+  .source {
+    background: var(--bh-ink-50);
+    border: 1px solid var(--bh-ink-200);
+    padding: 4px 6px;
+    text-align: center;
+  }
+  .source .name {
+    font-family: var(--font-ui);
+    font-weight: 600;
+    font-size: 9px;
+    color: var(--bh-black);
+  }
+  .source .detail {
+    font-family: var(--font-ui);
+    font-size: 7px;
+    color: var(--bh-ink-500);
+    margin-top: 1px;
+  }
+
+  /* ---- Bottom row ---- */
+  .bottom-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    justify-content: center;
+  }
+  .comp-badge {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    border: 1px solid var(--bh-turquoise);
+    padding: 5px 10px;
+    background: color-mix(in srgb, var(--bh-turquoise) 8%, transparent);
+  }
+  .comp-badge .dot {
+    width: 5px; height: 5px;
+    background: var(--bh-turquoise);
+    border-radius: 999px;
+    flex-shrink: 0;
+  }
+  .comp-badge span {
+    font-family: var(--font-ui);
+    font-weight: 500;
+    font-size: 9px;
+    color: var(--bh-black);
+  }
+  .divider-v {
+    width: 1px;
+    height: 18px;
+    background: var(--bh-ink-200);
+  }
+</style>
+</head>
+<body>
+
+<div class="diagram">
+
+  <!-- User -->
+  <div class="node-box" style="min-width: 240px;">
+    <h4>Marketing Planner / User</h4>
+    <div class="sub">Sends research query with section context</div>
+  </div>
+
+  <div class="v-arrow">
+    <div class="v-arrow-line"></div>
+    <div class="v-arrow-head"></div>
+    <div class="v-arrow-label">query + context</div>
+  </div>
+
+  <!-- Claude -->
+  <div class="node-box accent" style="min-width: 300px;">
+    <h4>Claude Sonnet 4.6 &mdash; Single Agent</h4>
+    <div class="sub">All 10 tool schemas loaded every query</div>
+    <div class="pills">
+      <span class="pill">Reads intent</span>
+      <span class="pill">Selects tools</span>
+      <span class="pill">Calls APIs</span>
+      <span class="pill">Synthesizes</span>
+    </div>
+  </div>
+
+  <div class="v-arrow">
+    <div class="v-arrow-line"></div>
+    <div class="v-arrow-head"></div>
+    <div class="v-arrow-label">tool calls</div>
+  </div>
+
+  <!-- 10 Tools -->
+  <div class="tools-section">
+    <div class="tools-section-label">10 Live Tools</div>
+    <div class="tools-grid">
+      <div class="tool"><div class="icon">&#x1f3e5;</div><div class="name">BH Locations</div><div class="api">Yext</div></div>
+      <div class="tool"><div class="icon">&#x1f9d1;&#x200d;&#x2695;&#xfe0f;</div><div class="name">BH Physicians</div><div class="api">Yext</div></div>
+      <div class="tool"><div class="icon">&#x1f4ca;</div><div class="name">Demographics</div><div class="api">Census ACS</div></div>
+      <div class="tool"><div class="icon">&#x1f4cd;</div><div class="name">Geocode</div><div class="api">Google Maps</div></div>
+      <div class="tool"><div class="icon">&#x1f697;</div><div class="name">Drive Times</div><div class="api">Google Maps</div></div>
+    </div>
+    <div class="tools-grid" style="margin-top: 4px;">
+      <div class="tool"><div class="icon">&#x2694;&#xfe0f;</div><div class="name">Competitors</div><div class="api">Google Places</div></div>
+      <div class="tool"><div class="icon">&#x2b50;</div><div class="name">Reviews Deep</div><div class="api">Outscraper</div></div>
+      <div class="tool"><div class="icon">&#x1f310;</div><div class="name">Web Research</div><div class="api">OpenAI</div></div>
+      <div class="tool"><div class="icon">&#x1f5fa;&#xfe0f;</div><div class="name">Isochrone</div><div class="api">ORS</div></div>
+      <div class="tool hl"><div class="icon">&#x1f9ec;</div><div class="name">CDC Behaviors</div><div class="api">Local Data</div></div>
+    </div>
+  </div>
+
+  <div class="v-arrow">
+    <div class="v-arrow-line"></div>
+    <div class="v-arrow-head"></div>
+    <div class="v-arrow-label">raw API data</div>
+  </div>
+
+  <!-- Data Sources -->
+  <div class="sources-grid">
+    <div class="source"><div class="name">Yext Live API</div><div class="detail">396 facilities &middot; 7,569 docs</div></div>
+    <div class="source"><div class="name">Census Bureau</div><div class="detail">ACS 5-Year &middot; 4 counties</div></div>
+    <div class="source"><div class="name">Google Maps</div><div class="detail">Geocode &middot; Distance &middot; Places</div></div>
+    <div class="source"><div class="name">CDC PLACES</div><div class="detail">33 measures &middot; 195 ZIPs</div></div>
+  </div>
+
+  <div class="v-arrow">
+    <div class="v-arrow-line"></div>
+    <div class="v-arrow-head"></div>
+  </div>
+
+  <!-- Bottom -->
+  <div class="bottom-row">
+    <div class="comp-badge">
+      <div class="dot"></div>
+      <span>Session compression after each turn</span>
+    </div>
+    <div class="divider-v"></div>
+    <div class="node-box" style="padding: 5px 14px;">
+      <h4>Structured Research Output</h4>
+      <div class="sub">Tables &middot; Narrative &middot; Ready for plan</div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>
