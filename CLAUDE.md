@@ -1,7 +1,7 @@
 # BH Market Research Agent — v2.1
 
 ## What This Is
-Baptist Health South Florida Market Research Agent. A Claude Sonnet-powered chat app with 9 live API tools for demographics, BH locations, physicians, competitors, reviews, and drive times. Direct Anthropic SDK backend (no n8n).
+Baptist Health South Florida Market Research Agent. A Claude Sonnet-powered chat app with 10 live API tools for demographics, BH locations, physicians, competitors, reviews, and drive times. Direct Anthropic SDK backend (no n8n).
 
 ## Architecture
 - `server.js` — Express backend, Anthropic SDK with tool_use, SSE streaming, 9 tool executors
@@ -21,16 +21,17 @@ cd ~/Desktop/Claude/MRA-v1.1-UI && node server.js
 - **Replit:** bh-market-research-agentv-111.replit.app
 - **GitHub:** https://github.com/Mikeymo87/mra-v1.1-ui
 
-## 9 Tools
+## 10 Tools
 1. Baptist Health Location Lookup (Yext) — 396 facilities, 19 categories
 2. Census Demographics Lookup — 2024→2023 auto-fallback, max 25 vars/call
-3. Web Research (Firecrawl search — returns raw results with full page markdown)
-4. Geocode Address (Google) — MUST include city name (duplicate addresses in SoFla)
-5. Calculate Drive Times (Google Distance Matrix) — flattened response, 10 destinations max per call
-6. Competitor Ratings (Google Places Text Search)
-7. Google Reviews Deep Pull (Outscraper)
-8. Drive Time Isochrone (OpenRouteService)
-9. Baptist Health Physician Lookup (Yext) — 7,569 physicians, filter: `c_listOfSpecialties` + `address.city`
+3. Web Research (Firecrawl search — returns titles, URLs, descriptions only. No full page content.)
+4. Read Page (Jina Reader → Firecrawl /scrape fallback) — extracts full markdown from a URL. Use after web_research for the 1-2 URLs that need deep reading.
+5. Geocode Address (Google) — MUST include city name (duplicate addresses in SoFla)
+6. Calculate Drive Times (Google Distance Matrix) — flattened response, 10 destinations max per call
+7. Competitor Ratings (Google Places Text Search)
+8. Google Reviews Deep Pull (Outscraper)
+9. Drive Time Isochrone (OpenRouteService)
+10. Baptist Health Physician Lookup (Yext) — 7,569 physicians, filter: `c_listOfSpecialties` + `address.city`
 
 ## Critical Implementation Details
 

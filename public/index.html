@@ -7,6 +7,8 @@
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script src="https://unpkg.com/leaflet-image@0.4.0/leaflet-image.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -678,6 +680,10 @@
           } else if (eventType === 'map_data') {
             // Store map data — render after text is done
             pendingMapData = payload;
+          } else if (eventType === 'map_command') {
+            // Agent-triggered map control — queue if map not ready yet
+            if (activeMap) { handleMapCommand(payload); }
+            else { if (!window._pendingMapCommands) window._pendingMapCommands = []; window._pendingMapCommands.push(payload); }
           } else if (eventType === 'choropleth_data') {
             // Store choropleth data — render after text is done
             pendingChoropleth = payload;
@@ -802,7 +808,7 @@
       || /\bheat\s*map\b/i.test(q);
     if (isChoroplethQuery) return null;
     const isDemoQuery = /demograph|payer mix|population|income|insurance|census/i.test(q);
-    const hasGeo = /\d{5}|miami|broward|palm beach|doral|coral gables|brickell|homestead|kendall|hollywood|plantation|pembroke|miramar|boca|boynton|delray|west palm|wellington|south florida|poa|primary operating|monroe/i.test(q);
+    const hasGeo = /\d{5}|miami|broward|palm beach|doral|coral gables|brickell|homestead|kendall|hollywood|plantation|pembroke|miramar|boca|boynton|delray|west palm|wellington|south florida|poa|primary operating|monroe|aventura|sunny isles|hallandale|davie|weston|coral springs|parkland|sunrise|fort lauderdale|lauderdale|coconut grove|key biscayne|pinecrest|cutler bay|hialeah|opa.?locka|north miami|south miami|dania|cooper city|tamarac|margate|pompano|deerfield|jupiter|stuart|vero beach|port st|florida city|key largo|key west/i.test(q);
     if (isDemoQuery && !hasGeo) {
       return {
         type: 'demographics',
@@ -1156,12 +1162,43 @@ ${rendered}
   }
 
   // ── Map Rendering (Leaflet) ───────────────────────────────────────────────
+  // Store active map reference for map_command control
+  let activeMap = null;
+  let activeMapLayers = { zips: null, isochrone: null };
+
+  // Isochrone color scheme — single ring = green, multiple = graduated
+  const ISOCHRONE_COLORS = {
+    300:  { fill: '#2EA84A', opacity: 0.45, label: '5-minute drive' },
+    600:  { fill: '#7DE69B', opacity: 0.35, label: '10-minute drive' },
+    900:  { fill: '#59BEC9', opacity: 0.28, label: '15-minute drive' },
+    1200: { fill: '#F59E0B', opacity: 0.22, label: '20-minute drive' },
+  };
+
+  // Point-in-polygon ray casting (for ZIP overlay filtering)
+  function pointInPoly(lat, lng, polygon) {
+    const coords = polygon.type === 'MultiPolygon' ? polygon.coordinates.flat() : polygon.coordinates;
+    for (const ring of coords) {
+      let inside = false;
+      for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+        const [xi, yi] = [ring[i][1], ring[i][0]];
+        const [xj, yj] = [ring[j][1], ring[j][0]];
+        if (((yi > lng) !== (yj > lng)) && (lat < (xj - xi) * (lng - yi) / (yj - yi) + xi)) inside = !inside;
+      }
+      if (inside) return true;
+    }
+    return false;
+  }
+
   function renderMap(mapData) {
     if (!mapData.center) return;
     try {
       const container = document.createElement('div');
       container.className = 'map-wrap';
       const mapId = 'map-' + Date.now();
+
+      // Toggle + export buttons
+      const toolbar = document.createElement('div');
+      toolbar.style.cssText = 'display:flex;gap:6px;margin-bottom:4px;align-items:center;';
       const toggle = document.createElement('button');
       toggle.className = 'map-toggle';
       toggle.textContent = 'Hide map';
@@ -1170,11 +1207,23 @@ ${rendered}
         if (mc.style.display === 'none') { mc.style.display = 'block'; toggle.textContent = 'Hide map'; }
         else { mc.style.display = 'none'; toggle.textContent = 'Show map'; }
       });
+      toolbar.appendChild(toggle);
+
+      // Export buttons
+      ['Square', '16:9', 'Portrait'].forEach(label => {
+        const fmt = label === 'Square' ? 'square' : label === '16:9' ? 'widescreen' : 'portrait';
+        const btn = document.createElement('button');
+        btn.className = 'map-toggle';
+        btn.style.cssText = 'font-size:11px;padding:2px 8px;';
+        btn.textContent = label;
+        btn.addEventListener('click', () => exportMap(fmt, mapId));
+        toolbar.appendChild(btn);
+      });
 
       const mapDiv = document.createElement('div');
       mapDiv.id = mapId;
       mapDiv.className = 'map-container';
-      container.append(toggle, mapDiv);
+      container.append(toolbar, mapDiv);
       messagesEl.appendChild(container);
 
       const map = L.map(mapId).setView([mapData.center.lat, mapData.center.lng], 13);
@@ -1182,49 +1231,219 @@ ${rendered}
         attribution: '&copy; OpenStreetMap contributors', maxZoom: 18
       }).addTo(map);
 
-      // Isochrone polygon FIRST (renders below pins so they stay hoverable)
+      // Store reference for map_command control
+      activeMap = map;
+      window._currentMapData = mapData;
+
+      // LAYER 1: Isochrone rings — render LARGEST first (bottom), SMALLEST last (top)
+      // so each ring's visible band is independently hoverable
       if (mapData.isochrone?.features) {
-        L.geoJSON(mapData.isochrone, {
-          style: { fillColor: '#2EA84A', fillOpacity: 0.12, color: '#2EA84A', weight: 1.5 },
-          interactive: false  // never steal hover/click from pins above
-        }).addTo(map);
+        const totalFeatures = mapData.isochrone.features.length;
+        // Sort features: largest value first (outermost ring rendered first = bottom layer)
+        const sortedFeatures = [...mapData.isochrone.features].sort((a, b) => (b.properties?.value || 0) - (a.properties?.value || 0));
+        const isoLayers = [];
+        for (const feature of sortedFeatures) {
+          const val = feature.properties?.value;
+          let style;
+          if (totalFeatures === 1) {
+            style = { fillColor: '#2EA84A', fillOpacity: 0.30, color: '#2EA84A', weight: 2 };
+          } else {
+            const c = ISOCHRONE_COLORS[val] || { fill: '#2EA84A', opacity: 0.25 };
+            style = { fillColor: c.fill, fillOpacity: c.opacity, color: c.fill, weight: 2 };
+          }
+          const layer = L.geoJSON({ type: 'FeatureCollection', features: [feature] }, {
+            style: style,
+            interactive: true,
+            onEachFeature: function(f, lyr) {
+              const c = ISOCHRONE_COLORS[val];
+              if (c) lyr.bindTooltip(c.label, { sticky: true, direction: 'center', className: 'iso-tooltip' });
+              // Highlight ring on hover — increase opacity and border weight
+              lyr.on('mouseover', function() {
+                this.setStyle({ fillOpacity: (style.fillOpacity || 0.3) + 0.15, weight: 3, color: '#25282A' });
+              });
+              lyr.on('mouseout', function() {
+                this.setStyle({ fillOpacity: style.fillOpacity, weight: style.weight || 2, color: style.fillColor });
+              });
+            }
+          }).addTo(map);
+          isoLayers.push(layer);
+        }
+        activeMapLayers.isochrone = isoLayers;
+
+        // Add isochrone legend
+        const legend = L.control({ position: 'bottomleft' });
+        legend.onAdd = function() {
+          const div = L.DomUtil.create('div', 'map-legend');
+          div.style.cssText = 'background:white;padding:8px 12px;border-radius:6px;font-size:11px;line-height:1.6;box-shadow:0 1px 4px rgba(0,0,0,0.2);';
+          let html = '<b style="font-size:12px">Drive Time</b><br>';
+          const featureValues = mapData.isochrone.features.map(f => f.properties?.value).sort((a,b) => a - b);
+          for (const val of featureValues) {
+            const c = ISOCHRONE_COLORS[val];
+            if (c) html += `<span style="display:inline-block;width:12px;height:12px;background:${c.fill};opacity:0.7;border-radius:2px;margin-right:6px;vertical-align:middle;"></span>${c.label}<br>`;
+          }
+          div.innerHTML = html;
+          return div;
+        };
+        legend.addTo(map);
       }
 
-      // Competitors FIRST (red) — rendered below BH pins
+      // LAYER 2: Competitors (red) — below BH pins
       for (const comp of (mapData.competitors || [])) {
         L.circleMarker([comp.lat, comp.lng], {
           radius: 6, fillColor: '#ef4444', color: '#991b1b', weight: 1.5, fillOpacity: 0.8
         }).addTo(map).bindPopup(`<b style="color:#ef4444">${comp.name}</b><br>${comp.rating ? comp.rating + ' stars | ' + comp.reviews + ' reviews' : ''}<br><small>${comp.address || ''}</small>`);
       }
 
-      // Origin marker (gold)
+      // LAYER 3: Origin marker (gold)
       if (mapData.origin) {
         L.circleMarker([mapData.origin.lat, mapData.origin.lng], {
           radius: 10, fillColor: '#f59e0b', color: '#b45309', weight: 2, fillOpacity: 0.9
         }).addTo(map).bindPopup(`<b>Origin</b><br>${mapData.origin.label || ''}`);
       }
 
-      // BH locations LAST (green) — always on top
+      // LAYER 4: BH locations LAST (green) — always on top
       for (const loc of (mapData.bhLocations || [])) {
         L.circleMarker([loc.lat, loc.lng], {
           radius: 7, fillColor: '#2EA84A', color: '#1a6b2e', weight: 1.5, fillOpacity: 0.85
         }).addTo(map).bindPopup(`<b style="color:#2EA84A">BH:</b> ${loc.name}<br><small>${loc.address || ''}</small>`);
       }
 
-      // Fit bounds to all markers
+      // Fit bounds to all content (isochrone + markers)
       const allPoints = [];
       if (mapData.origin) allPoints.push([mapData.origin.lat, mapData.origin.lng]);
       for (const l of (mapData.bhLocations || [])) allPoints.push([l.lat, l.lng]);
       for (const c of (mapData.competitors || [])) allPoints.push([c.lat, c.lng]);
+      if (mapData.isochrone?.features) {
+        for (const f of mapData.isochrone.features) {
+          const coords = f.geometry.type === 'MultiPolygon' ? f.geometry.coordinates.flat(2) : f.geometry.coordinates.flat();
+          for (const c of coords) allPoints.push([c[1], c[0]]);
+        }
+      }
       if (allPoints.length > 1) map.fitBounds(allPoints, { padding: [30, 30] });
 
-      // Fix tile rendering — invalidate size after DOM settles
-      setTimeout(() => { map.invalidateSize(); }, 200);
-
+      setTimeout(() => {
+        map.invalidateSize();
+        // Replay any queued map commands that arrived before map was ready
+        if (window._pendingMapCommands && window._pendingMapCommands.length > 0) {
+          window._pendingMapCommands.forEach(cmd => handleMapCommand(cmd));
+          window._pendingMapCommands = [];
+        }
+      }, 300);
       messagesEl.scrollTop = messagesEl.scrollHeight;
     } catch (e) {
       console.warn('[Map] Render failed:', e.message);
     }
+  }
+
+  // ── ZIP Overlay (on-demand) ───────────────────────────────────────────────
+  async function renderZipOverlay(zips) {
+    if (!activeMap || !zips || zips.length === 0) return;
+    // Remove existing ZIP layer
+    if (activeMapLayers.zips) { activeMap.removeLayer(activeMapLayers.zips); activeMapLayers.zips = null; }
+
+    // Fetch ZCTA GeoJSON (cached)
+    if (!window._zctaGeoJSON) {
+      const resp = await fetch('/api/zcta-geojson');
+      window._zctaGeoJSON = await resp.json();
+    }
+
+    const matchingFeatures = window._zctaGeoJSON.features.filter(f => zips.includes(f.properties.ZCTA5CE20));
+    if (matchingFeatures.length === 0) return;
+
+    const zipLayer = L.geoJSON({ type: 'FeatureCollection', features: matchingFeatures }, {
+      style: { fillColor: '#2EA84A', fillOpacity: 0.04, color: '#25282A', weight: 1, dashArray: '3,3' },
+      onEachFeature: (feature, layer) => {
+        layer.bindTooltip(feature.properties.ZCTA5CE20, { permanent: false, direction: 'center', className: 'zip-tooltip' });
+        layer.on('mouseover', function() { this.setStyle({ fillOpacity: 0.12, weight: 2 }); });
+        layer.on('mouseout', function() { this.setStyle({ fillOpacity: 0.04, weight: 1 }); });
+      }
+    });
+
+    // Add BELOW isochrone — bring isochrone layers and pins to front
+    zipLayer.addTo(activeMap);
+    if (activeMapLayers.isochrone) {
+      const isoArr = Array.isArray(activeMapLayers.isochrone) ? activeMapLayers.isochrone : [activeMapLayers.isochrone];
+      isoArr.forEach(l => l.bringToFront());
+    }
+    activeMapLayers.zips = zipLayer;
+  }
+
+  // ── Map Command Handler (from agent) ──────────────────────────────────────
+  function handleMapCommand(cmd) {
+    if (!activeMap) return;
+    switch (cmd.command) {
+      case 'show_zips':
+        const zips = cmd.zips ? cmd.zips.split(',').map(z => z.trim()) : (window._currentMapData?.catchmentZips || []);
+        renderZipOverlay(zips);
+        break;
+      case 'hide_zips':
+        if (activeMapLayers.zips) { activeMap.removeLayer(activeMapLayers.zips); activeMapLayers.zips = null; }
+        break;
+      case 'zoom_to':
+        if (cmd.lat && cmd.lng) activeMap.setView([cmd.lat, cmd.lng], cmd.zoom || 14);
+        break;
+      case 'set_view':
+        if (cmd.lat && cmd.lng) activeMap.setView([cmd.lat, cmd.lng], cmd.zoom || 12);
+        break;
+      case 'highlight':
+        if (cmd.lat && cmd.lng) {
+          L.circleMarker([cmd.lat, cmd.lng], { radius: 15, fillColor: '#F59E0B', color: '#F59E0B', weight: 3, fillOpacity: 0.3 })
+            .addTo(activeMap).bindPopup(cmd.label || 'Highlighted').openPopup();
+        }
+        break;
+      case 'clear_highlights':
+        break;
+    }
+  }
+
+  // ── Map Export ────────────────────────────────────────────────────────────
+  async function exportMap(format, mapId) {
+    const sizes = { square: { w: 2048, h: 2048 }, widescreen: { w: 3840, h: 2160 }, portrait: { w: 2400, h: 3000 } };
+    const size = sizes[format] || sizes.square;
+    if (!activeMap) return;
+    try {
+      // Close popups
+      activeMap.closePopup();
+      activeMap.eachLayer(l => { if (l.closePopup) l.closePopup(); });
+
+      // Use leaflet-image to capture map with ALL layers (tiles + SVG + canvas)
+      const canvas = await new Promise((resolve, reject) => {
+        leafletImage(activeMap, function(err, canvas) {
+          if (err) reject(err); else resolve(canvas);
+        });
+      });
+
+      // Compose into target size canvas
+      const finalCanvas = document.createElement('canvas');
+      const barH = Math.round(size.h * 0.025);
+      finalCanvas.width = size.w;
+      finalCanvas.height = size.h + barH;
+      const ctx = finalCanvas.getContext('2d');
+      // Crop source to target aspect ratio from center
+      const srcRatio = canvas.width / canvas.height;
+      const tgtRatio = size.w / size.h;
+      let sx, sy, sw, sh;
+      if (srcRatio > tgtRatio) {
+        sh = canvas.height; sw = sh * tgtRatio;
+        sx = (canvas.width - sw) / 2; sy = 0;
+      } else {
+        sw = canvas.width; sh = sw / tgtRatio;
+        sx = 0; sy = (canvas.height - sh) / 2;
+      }
+      ctx.drawImage(canvas, sx, sy, sw, sh, 0, 0, size.w, size.h);
+      // Attribution bar
+      ctx.fillStyle = '#25282A';
+      ctx.fillRect(0, size.h, size.w, barH);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = `${Math.round(size.w / 140)}px sans-serif`;
+      ctx.textAlign = 'right';
+      ctx.fillText('Baptist Health Market Research Agent  |  ' + new Date().toLocaleDateString(), size.w - 30, size.h + barH - 12);
+      // Download
+      const link = document.createElement('a');
+      link.download = `bh-map-${format}-${Date.now()}.png`;
+      link.href = finalCanvas.toDataURL('image/png');
+      link.click();
+    } catch (e) { console.warn('[Export] Failed:', e.message); }
   }
   // ── Choropleth Heat Map Rendering ─────────────────────────────────────────
   // 5-level BH brand ramp: Turquoise → Mint → Green

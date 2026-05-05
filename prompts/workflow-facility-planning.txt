@@ -7,7 +7,7 @@ WHEN TO USE THIS WORKFLOW: Any query about a new facility, a facility opening, s
 HOW TO THINK ABOUT IT:
 1. **Understand the facility.** What service lines will it offer? What audience does it serve? If the user hasn't said, ask — you can't do this analysis without knowing the service mix.
 
-2. **Map BH's existing footprint through the lens of this facility.** Don't just search "all locations" — think about which BH services interact with this facility:
+2. **Map BH's existing footprint through the lens of this facility.** Start with a broad Yext search (closed=$eq:false) to see BH's full nearby footprint, then classify each result as overlap, feeder, or gap for the specific facility being analyzed. Think about which BH services interact with this facility:
    - **Overlap:** BH locations that offer the SAME service lines within the trade area. These are cannibalization risks — the new facility may pull volume from them, or they may make the new facility redundant. A cardiologist 8 minutes away from a new cardiology center is overlap. An imaging center 5 minutes from a new imaging suite is overlap.
    - **Feeder:** BH locations that offer DIFFERENT service lines that would REFER patients to this facility. A primary care office 10 minutes away is a feeder for a specialty center. An urgent care is a feeder for follow-up specialty care. A hospital is both an overlap and a referral destination depending on the service.
    - **Gap:** Service lines the new facility offers that have NO BH presence nearby. These are the whitespace — the reason the facility exists.

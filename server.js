@@ -343,7 +343,7 @@ const tools = [
       properties: {
         filter: {
           type: 'string',
-          description: 'URL-encoded Yext filter JSON. Single keyword: %7B%22name%22%3A%7B%22%24contains%22%3A%22KEYWORD%22%7D%2C%22closed%22%3A%7B%22%24eq%22%3Afalse%7D%7D — KEYWORD examples: Primary%2BCare, Imaging, Orthop, Cardio, Cancer, Neuro, Surgery. For same-day care (FULL category — includes urgent care, express, emergency/ER): %7B%22%24or%22%3A%5B%7B%22name%22%3A%7B%22%24contains%22%3A%22Urgent%2BCare%22%7D%7D%2C%7B%22name%22%3A%7B%22%24contains%22%3A%22Same-Day%2BCare%22%7D%7D%2C%7B%22name%22%3A%7B%22%24contains%22%3A%22Emergency%22%7D%7D%2C%7B%22name%22%3A%7B%22%24contains%22%3A%22Express%22%7D%7D%5D%2C%22closed%22%3A%7B%22%24eq%22%3Afalse%7D%7D'
+          description: 'URL-encoded Yext filter JSON. For ALL BH locations (broad search — use for market profiles, "what do we have nearby", "all locations", or any query needing the full BH footprint): %7B%22closed%22%3A%7B%22%24eq%22%3Afalse%7D%7D — Returns up to 50 facilities in one call. Single keyword: %7B%22name%22%3A%7B%22%24contains%22%3A%22KEYWORD%22%7D%2C%22closed%22%3A%7B%22%24eq%22%3Afalse%7D%7D — KEYWORD examples: Primary%2BCare, Imaging, Orthop, Cardio, Cancer, Neuro, Surgery. For same-day care (FULL category — includes urgent care, express, emergency/ER): %7B%22%24or%22%3A%5B%7B%22name%22%3A%7B%22%24contains%22%3A%22Urgent%2BCare%22%7D%7D%2C%7B%22name%22%3A%7B%22%24contains%22%3A%22Same-Day%2BCare%22%7D%7D%2C%7B%22name%22%3A%7B%22%24contains%22%3A%22Emergency%22%7D%7D%2C%7B%22name%22%3A%7B%22%24contains%22%3A%22Express%22%7D%7D%5D%2C%22closed%22%3A%7B%22%24eq%22%3Afalse%7D%7D'
         }
       },
       required: ['filter']
@@ -363,13 +363,24 @@ const tools = [
   },
   {
     name: 'web_research',
-    description: 'Live web search via Firecrawl. Use for market trends, Esri Tapestry segments, competitor news, all-provider searches. Returns search results with full page content. Translate non-English results to English.',
+    description: 'Web search via Firecrawl. Returns titles, URLs, and short descriptions. Use for market trends, Esri Tapestry segments, competitor news, all-provider searches. Does NOT return full page content — use read_page to get full content from a specific URL. Translate non-English results to English.',
     input_schema: {
       type: 'object',
       properties: {
         research_query: { type: 'string', description: 'Research query. For all-provider searches search broadly including competitors.' }
       },
       required: ['research_query']
+    }
+  },
+  {
+    name: 'read_page',
+    description: 'Extracts full page content as clean markdown from a specific URL. Use after web_research when you need detailed content from a result. Tries Jina Reader first (free); falls back to Firecrawl scrape for JS-heavy pages.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        url: { type: 'string', description: 'The full URL to extract content from.' }
+      },
+      required: ['url']
     }
   },
   {
@@ -488,6 +499,33 @@ const tools = [
       },
       required: ['metric', 'label']
     }
+  },
+  {
+    name: 'resolve_bh_facility',
+    description: 'Instantly resolves a Baptist Health facility name to its address and coordinates from local cache. Use before geocoding — if the user mentions a BH facility by name, resolve it here first (free, instant) instead of searching Yext. Examples: "Homestead Hospital", "Baptist Hospital", "Doctors Hospital", "West Kendall".',
+    input_schema: {
+      type: 'object',
+      properties: {
+        facility_name: { type: 'string', description: 'Natural language facility name, e.g., "Homestead Hospital", "Baptist Hospital", "Doctors Hospital"' }
+      },
+      required: ['facility_name']
+    }
+  },
+  {
+    name: 'map_control',
+    description: 'Controls the map display. Use to add/remove ZIP overlays, zoom to a facility, highlight locations, or modify the map based on user requests. Only call when the user asks to change the map view.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        command: { type: 'string', enum: ['show_zips', 'hide_zips', 'zoom_to', 'highlight', 'set_view', 'clear_highlights'], description: 'Map command to execute' },
+        zips: { type: 'string', description: 'Comma-separated ZIP codes for show_zips command' },
+        lat: { type: 'number', description: 'Latitude for zoom_to/set_view' },
+        lng: { type: 'number', description: 'Longitude for zoom_to/set_view' },
+        zoom: { type: 'number', description: 'Zoom level (10-18)' },
+        label: { type: 'string', description: 'Label text for highlight command' }
+      },
+      required: ['command']
+    }
   }
 ];
 
@@ -522,6 +560,76 @@ try {
 
 // ZIPs in CDC data but outside the 4-county POA (Monroe, Miami-Dade, Broward, Palm Beach)
 const POA_EXCLUDED_ZIPS = new Set(['33440', '33455', '33458', '33469', '33471', '33478']);
+
+// ── BH Facility Cache (Yext preload at startup, persisted to disk) ──────
+const BH_CACHE_PATH = path.join(__dirname, 'data', 'bh-facility-cache.json');
+let bhFacilityCache = [];
+
+// Load from disk on cold start
+try {
+  bhFacilityCache = JSON.parse(fs.readFileSync(BH_CACHE_PATH, 'utf8'));
+  console.log(`  BH Facilities: ${bhFacilityCache.length} loaded from disk cache`);
+} catch (e) {
+  console.log('  BH Facilities: no disk cache — will fetch from Yext');
+}
+
+async function refreshBHFacilityCache() {
+  try {
+    let allEntities = [];
+    let offset = 0;
+    const limit = 50;
+    // Paginate to get ALL facilities (Yext max 50 per call)
+    while (true) {
+      const url = `https://liveapi.yext.com/v2/accounts/me/entities?api_key=${process.env.YEXT_API_KEY}&v=20231201&entityTypes=healthcareFacility&limit=${limit}&offset=${offset}&fields=name,address,geocodedCoordinate,closed&filter=%7B%22closed%22%3A%7B%22%24eq%22%3Afalse%7D%7D`;
+      const res = await fetch(url);
+      const data = await res.json();
+      const entities = data.response?.entities || [];
+      allEntities = allEntities.concat(entities);
+      if (entities.length < limit) break; // No more pages
+      offset += limit;
+    }
+    bhFacilityCache = allEntities;
+    // Persist to disk
+    fs.writeFileSync(BH_CACHE_PATH, JSON.stringify(allEntities, null, 2));
+    console.log(`  BH Facilities: ${bhFacilityCache.length} cached from Yext (saved to disk)`);
+  } catch (e) {
+    console.warn('  BH Facilities: Yext refresh failed', e.message);
+  }
+}
+// Refresh on startup (async, doesn't block), then every 6 hours
+refreshBHFacilityCache();
+setInterval(refreshBHFacilityCache, 6 * 60 * 60 * 1000);
+
+function resolveBHFacility(query) {
+  if (bhFacilityCache.length === 0) return null;
+  const q = query.toLowerCase().trim();
+  const words = q.split(/\s+/).filter(w => w.length > 2);
+
+  // Score each facility — higher = better match
+  const scored = bhFacilityCache.map(e => {
+    const name = (e.name || '').toLowerCase();
+    const city = (e.address?.city || '').toLowerCase();
+    let score = 0;
+    // Count how many query words match name or city
+    for (const w of words) {
+      if (name.includes(w)) score += 2;
+      else if (city.includes(w)) score += 1;
+    }
+    // Boost: if query says "hospital" and the facility IS the hospital (not a sub-facility with "(Hospital)" in parentheses)
+    if (q.includes('hospital') && /baptist health.*hospital/i.test(e.name) && !/\(/.test(e.name)) score += 20;
+    // Smaller boost for sub-facilities that reference the hospital campus
+    if (q.includes('hospital') && name.includes('hospital') && /\(/.test(e.name)) score += 5;
+    // Boost: exact facility type match (urgent care, imaging, etc.)
+    if (q.includes('urgent') && name.includes('urgent') && !/\(/.test(e.name)) score += 20;
+    if (q.includes('imaging') && name.includes('imaging') && !/\(/.test(e.name)) score += 20;
+    if (q.includes('primary') && name.includes('primary') && !/\(/.test(e.name)) score += 20;
+    // Penalty: if query says "hospital" but facility is NOT a hospital
+    if (q.includes('hospital') && !name.includes('hospital')) score -= 5;
+    return { entity: e, score };
+  }).filter(s => s.score > 0).sort((a, b) => b.score - a.score);
+
+  return scored.length > 0 ? scored[0].entity : null;
+}
 
 // ── Census Cache ───────────────────────────────────────────────────────────
 // Census ACS data changes once a year. Cache successful responses to survive
@@ -796,16 +904,24 @@ async function executeTool(name, input) {
     switch (name) {
 
       case 'baptist_health_location_lookup': {
-        url = `https://liveapi.yext.com/v2/accounts/me/entities?api_key=${process.env.YEXT_API_KEY}&v=20231201&entityTypes=healthcareFacility&limit=50&fields=name,address,geocodedCoordinate,closed&filter=${input.filter}`;
-        source = url.replace(process.env.YEXT_API_KEY, '[KEY]');
-        res = await fetchWithTimeout(url);
-        data = await res.json();
-        let entities = data.response?.entities || [];
-        let filterMeta = null;
+        const isBroadSearch = input.filter === '%7B%22closed%22%3A%7B%22%24eq%22%3Afalse%7D%7D';
+        let entities, filterMeta = null;
+
+        if (isBroadSearch && bhFacilityCache.length > 0) {
+          // Serve from cache — zero API cost
+          entities = [...bhFacilityCache];
+          source = 'BH Facility Cache (local)';
+        } else {
+          url = `https://liveapi.yext.com/v2/accounts/me/entities?api_key=${process.env.YEXT_API_KEY}&v=20231201&entityTypes=healthcareFacility&limit=50&fields=name,address,geocodedCoordinate,closed&filter=${input.filter}`;
+          source = url.replace(process.env.YEXT_API_KEY, '[KEY]');
+          res = await fetchWithTimeout(url);
+          data = await res.json();
+          entities = data.response?.entities || [];
+        }
 
         // Distance pre-filter: if we have origin coords, keep only nearby results
         if (executeTool._originCoords && entities.length > 5) {
-          const maxMiles = (executeTool._filterRadius || 10) * 2;
+          const maxMiles = 25;
           const before = entities.length;
           // Add distance to each entity for sorting
           entities = entities.map(e => {
@@ -814,9 +930,8 @@ async function executeTool(name, input) {
             e._distMiles = (lat && lon) ? haversineDistance(executeTool._originCoords.lat, executeTool._originCoords.lng, lat, lon) : 999;
             return e;
           }).filter(e => e._distMiles <= maxMiles);
-          // Sort by distance, keep nearest 20
+          // Sort by distance
           entities.sort((a, b) => a._distMiles - b._distMiles);
-          if (entities.length > 20) entities = entities.slice(0, 20);
           filterMeta = { origin: executeTool._originCoords, maxMiles, before, after: entities.length, omitted: before - entities.length };
         }
         // Even without origin, cap at 25 to reduce token bloat
@@ -920,8 +1035,7 @@ async function executeTool(name, input) {
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.FIRECRAWL_API_KEY}` },
           body: JSON.stringify({
             query: input.research_query,
-            limit: 8,
-            scrapeOptions: { formats: ['markdown'], onlyMainContent: true }
+            limit: 5
           })
         }, 60000);
         data = await res.json();
@@ -933,12 +1047,79 @@ async function executeTool(name, input) {
         const results = (data.data || []).map(r => ({
           title: r.title || '',
           url: r.url || '',
-          content: r.markdown || r.description || ''
+          description: r.description || ''
         }));
         return envelope(source, 'firecrawl.dev/v1/search', timestamp, results, {
           query: { research_query: input.research_query },
           result_count: results.length
         });
+      }
+
+      case 'read_page': {
+        const targetUrl = input.url;
+        source = 'Jina Reader';
+
+        // Step 1: Try Jina Reader (free, no API key)
+        try {
+          res = await fetchWithTimeout(`https://r.jina.ai/${targetUrl}`, {
+            method: 'GET',
+            headers: { 'Accept': 'text/plain' }
+          }, 30000);
+          const markdown = await res.text();
+
+          // If Jina returned meaningful content (>200 chars), use it
+          if (markdown && markdown.length > 200) {
+            return envelope(source, `r.jina.ai/${targetUrl}`, timestamp, {
+              url: targetUrl,
+              content: markdown.slice(0, 50000)
+            }, { extractor: 'jina', content_length: markdown.length });
+          }
+        } catch (e) {
+          // Jina failed — fall through to Firecrawl
+        }
+
+        // Step 2: Fallback to Firecrawl /scrape (handles JS-rendered pages)
+        source = 'Firecrawl Scrape (fallback)';
+        res = await fetchWithTimeout('https://api.firecrawl.dev/v1/scrape', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${process.env.FIRECRAWL_API_KEY}`
+          },
+          body: JSON.stringify({
+            url: targetUrl,
+            formats: ['markdown'],
+            onlyMainContent: true
+          })
+        }, 60000);
+        data = await res.json();
+        if (!data.success) {
+          return envelope(source, targetUrl, timestamp, {
+            error: data.error || 'Firecrawl scrape failed'
+          }, { extractor: 'firecrawl_fallback' });
+        }
+        return envelope(source, targetUrl, timestamp, {
+          url: targetUrl,
+          content: (data.data?.markdown || '').slice(0, 50000)
+        }, { extractor: 'firecrawl_fallback', content_length: data.data?.markdown?.length || 0 });
+      }
+
+      case 'resolve_bh_facility': {
+        const match = resolveBHFacility(input.facility_name);
+        if (match && match.geocodedCoordinate) {
+          executeTool._originCoords = { lat: match.geocodedCoordinate.latitude, lng: match.geocodedCoordinate.longitude };
+          return envelope('BH Facility Cache', 'local', timestamp, {
+            name: match.name,
+            address: match.address ? `${match.address.line1}, ${match.address.city}, ${match.address.region} ${match.address.postalCode}` : '',
+            lat: match.geocodedCoordinate.latitude,
+            lng: match.geocodedCoordinate.longitude
+          }, { cached: true });
+        }
+        return envelope('BH Facility Cache', 'local', timestamp, { error: `No matching facility found for "${input.facility_name}"` }, { cached: true });
+      }
+
+      case 'map_control': {
+        return envelope('Map Control', 'local', timestamp, { command: input.command, ...input }, { cached: true, _mapCommand: true });
       }
 
       case 'geocode_address': {
@@ -1290,7 +1471,7 @@ async function executeTool(name, input) {
 
 function getSession(sessionId) {
   if (!sessions.has(sessionId)) {
-    sessions.set(sessionId, { messages: [], lastAccess: Date.now() });
+    sessions.set(sessionId, { messages: [], lastAccess: Date.now(), knownEntities: { bhLocations: [], competitors: [], origins: [] } });
   }
   const session = sessions.get(sessionId);
   session.lastAccess = Date.now();
@@ -1315,10 +1496,13 @@ function humanizeToolCall(toolName, input) {
     'census_demographics_lookup': 'Pulling Census demographics',
     'cdc_health_behaviors': 'Loading CDC health behaviors',
     'web_research': 'Searching the web',
+    'read_page': 'Reading page content',
     'drive_time_isochrone': 'Generating drive-time polygon',
     'google_reviews_deep_pull': 'Pulling Google reviews',
     'one_medical_location_lookup': 'Checking One Medical locations',
     'generate_choropleth_map': 'Generating heat map',
+    'resolve_bh_facility': 'Resolving facility',
+    'map_control': 'Updating map',
   };
   if (labels[toolName]) return labels[toolName];
   if (toolName === 'baptist_health_location_lookup') {
@@ -1343,21 +1527,32 @@ function humanizeToolCall(toolName, input) {
 }
 
 // Accumulate geo data from tool results for map rendering
-function accumulateGeoData(geo, toolName, result) {
+function accumulateGeoData(geo, toolName, result, session) {
   try {
     const data = result.data;
     if (toolName === 'geocode_address' && Array.isArray(data) && data[0]?.geometry?.location) {
       const loc = data[0].geometry.location;
       geo.origin = { lat: loc.lat, lng: loc.lng, label: data[0].formatted_address || 'Origin' };
+      if (session?.knownEntities) {
+        session.knownEntities.origins.push({ lat: loc.lat, lng: loc.lng, label: data[0].formatted_address });
+      }
+    }
+    if (toolName === 'resolve_bh_facility' && data?.lat) {
+      geo.origin = { lat: data.lat, lng: data.lng, label: data.name || 'BH Facility' };
     }
     if (toolName === 'baptist_health_location_lookup' && Array.isArray(data)) {
       for (const e of data) {
         if (e.geocodedCoordinate?.latitude) {
-          geo.bhLocations.push({
+          const entry = {
             name: e.name, lat: e.geocodedCoordinate.latitude, lng: e.geocodedCoordinate.longitude,
             address: e.address ? `${e.address.line1}, ${e.address.city}` : '',
             type: e.name?.match(/Urgent|Same-Day/i) ? 'urgent' : e.name?.match(/Hospital/i) ? 'hospital' : 'specialty'
-          });
+          };
+          geo.bhLocations.push(entry);
+          // Persist to session memory (deduplicated)
+          if (session?.knownEntities && !session.knownEntities.bhLocations.some(b => b.name === e.name && Math.abs(b.lat - entry.lat) < 0.001)) {
+            session.knownEntities.bhLocations.push(entry);
+          }
         }
       }
     }
@@ -1373,6 +1568,20 @@ function accumulateGeoData(geo, toolName, result) {
     }
     if (toolName === 'drive_time_isochrone' && data?.features) {
       geo.isochrone = data;
+      // Identify ZIPs within isochrone
+      if (zctaGeoJSON) {
+        const catchmentZips = [];
+        for (const f of zctaGeoJSON.features) {
+          const zip = f.properties.ZCTA5CE20;
+          const coords = f.geometry.coordinates[0];
+          const cLng = coords.reduce((s, c) => s + c[0], 0) / coords.length;
+          const cLat = coords.reduce((s, c) => s + c[1], 0) / coords.length;
+          if (pointInIsochrone(cLat, cLng, data)) {
+            catchmentZips.push(zip);
+          }
+        }
+        geo.catchmentZips = catchmentZips;
+      }
     }
   } catch (e) { /* non-critical — skip if parsing fails */ }
 }
@@ -1477,7 +1686,12 @@ async function runAgentLoop(sessionId, userMessage, res) {
       updateEvidenceCoverage(evidence, toolCall.name, toolCall.input);
 
       // Accumulate geo data for potential map rendering
-      accumulateGeoData(runGeo, toolCall.name, result);
+      accumulateGeoData(runGeo, toolCall.name, result, session);
+
+      // Send map commands directly to client
+      if (result._mapCommand || toolCall.name === 'map_control') {
+        sendSSE(res, 'map_command', result.data || result);
+      }
 
       // Accumulate choropleth data if this was a heat map tool call
       if (toolCall.name === 'generate_choropleth_map' && result._choropleth) {
@@ -1526,6 +1740,10 @@ async function runAgentLoop(sessionId, userMessage, res) {
   // Fallback: if accumulateGeoData missed the origin, use executeTool._originCoords
   if (!runGeo.origin && executeTool._originCoords) {
     runGeo.origin = { lat: executeTool._originCoords.lat, lng: executeTool._originCoords.lng, label: 'Origin' };
+  }
+  // Merge session entities if current round has none (fixes BH pin loss after compression)
+  if (session.knownEntities && runGeo.bhLocations.length === 0 && session.knownEntities.bhLocations.length > 0) {
+    runGeo.bhLocations = [...session.knownEntities.bhLocations];
   }
   const hasGeoData = runGeo.origin || runGeo.bhLocations.length > 0 || runGeo.competitors.length > 0;
   console.log(`[Map] Pre-filter: ${runGeo.bhLocations.length} BH, ${runGeo.competitors.length} comp, isochrone=${!!runGeo.isochrone} (${runGeo.isochrone?.features?.length || 0} features), wantsMap=${wantsMap}`);
@@ -1594,7 +1812,8 @@ async function runAgentLoop(sessionId, userMessage, res) {
       origin: runGeo.origin,
       bhLocations: bhFiltered,
       competitors: compFiltered,
-      isochrone: runGeo.isochrone
+      isochrone: runGeo.isochrone,
+      catchmentZips: runGeo.catchmentZips || null
     };
     sendSSE(res, 'map_data', mapData);
     console.log(`[Map] Sent: ${bhFiltered.length} BH + ${compFiltered.length} competitors${runGeo.isochrone ? ' + isochrone' : ''}`);
