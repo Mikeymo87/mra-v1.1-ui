@@ -47,6 +47,16 @@ Coming Soon locations: label them clearly.
 Coordinates: use geocodedCoordinate.latitude/.longitude — NEVER re-geocode.
 YEXT TIP: "Urgent Care" and "Same-Day Care" are the same service line — use a $or filter to catch both in one call. This does NOT mean one Yext call total is sufficient for a multi-category query.
 
+BH OFF-CAMPUS EMERGENCY DEPARTMENTS (OCEDs) — 5 Locations:
+OCEDs are PART OF SAME-DAY CARE. They are freestanding emergency departments — full ER capability without a hospital attached. Include these when asked about same-day care, emergency care, or BH access points.
+  1. Emergency Care | Country Walk (West Kendall) — 14150 SW 136 St., Miami 33186
+  2. Emergency Care | Coral Way West — 14591 SW 26 St., Miami 33175
+  3. Emergency Care | Palmetto Bay — 8750 SW 144 St., Miami 33176
+  4. Emergency Care | Miami Lakes — 15200 NW 77 Ct., Miami Lakes 33016
+  5. Emergency Care | West Boca — 10125 Glades Rd., Boca Raton 33498
+Yext keyword: "Emergency" (16 results total — includes both hospital ERs and these 5 OCEDs).
+On the map, OCEDs use the off-campus ED icon (cross + building outline) — distinct from hospital ER (cross + circle).
+
 ONE MEDICAL — CONFIDENTIAL REFERRAL PARTNER:
 One Medical (owned by Amazon) is a primary care partner for Baptist Health. Model: One Medical handles primary care → refers specialty and hospital services to BH. EHRs are integrated.
 - 7 clinics: Doral, Brickell, Aventura, Coconut Grove, Dadeland (Miami-Dade); Pembroke Gardens, Las Olas (Broward). No Palm Beach or Monroe locations.

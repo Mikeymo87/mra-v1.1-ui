@@ -1745,6 +1745,51 @@ async function runAgentLoop(sessionId, userMessage, res) {
   if (session.knownEntities && runGeo.bhLocations.length === 0 && session.knownEntities.bhLocations.length > 0) {
     runGeo.bhLocations = [...session.knownEntities.bhLocations];
   }
+  // AUTO-INJECT BH locations from cache if none were accumulated but query mentions BH or a service line
+  // This ensures BH always maps when discussed, even if the agent only called competitor tools
+  if (runGeo.bhLocations.length === 0 && bhFacilityCache.length > 0 && runGeo.origin) {
+    const mentionsBH = /\b(bh|baptist\s*health|our\s+(location|facilit|urgent|hospital|imaging|primary|emergency|express))/i.test(userMessage);
+    const mentionsServiceLine = /\b(urgent\s*care|hospital|imaging|primary\s*care|emergency|express|same.?day|radiol|mri|ct\b|cardio|ortho|neuro|spine|cancer|oncol|surg|endoscop|infusion|pharmac|sleep|urol|gastro|women|rehab|physical\s*therap)/i.test(userMessage);
+    if (mentionsBH || mentionsServiceLine) {
+      // Pull matching BH facilities from cache — filter by service type if specific, otherwise pull all nearby
+      const serviceMatch = userMessage.match(/\b(urgent\s*care|hospital|imaging|primary\s*care|emergency|express|same.?day|radiol|cardio|ortho|neuro|spine|cancer|surg|endoscop|infusion|pharmac|sleep|urol|gastro|women|rehab|physical\s*therap)\b/i);
+      const keyword = serviceMatch ? serviceMatch[1].toLowerCase() : null;
+
+      let injected = bhFacilityCache.filter(e => {
+        if (!e.geocodedCoordinate?.latitude) return false;
+        // If a specific service line was mentioned, filter by name match
+        if (keyword) {
+          const eName = (e.name || '').toLowerCase();
+          if (keyword.includes('urgent') || keyword.includes('same')) return /urgent|same.?day/i.test(eName);
+          if (keyword.includes('hospital')) return /hospital/i.test(eName);
+          if (keyword.includes('imaging') || keyword.includes('radiol') || keyword.includes('mri')) return /imaging|radiol|diagnostic/i.test(eName);
+          if (keyword.includes('primary')) return /primary|family|internal/i.test(eName);
+          if (keyword.includes('emergency')) return /emergency/i.test(eName);
+          if (keyword.includes('express')) return /express/i.test(eName);
+          if (keyword.includes('cardio')) return /cardio|heart|vascular/i.test(eName);
+          if (keyword.includes('ortho')) return /orthop/i.test(eName);
+          if (keyword.includes('neuro')) return /neuro|brain/i.test(eName);
+          if (keyword.includes('spine')) return /spine/i.test(eName);
+          if (keyword.includes('cancer') || keyword.includes('oncol')) return /cancer|oncol/i.test(eName);
+          if (keyword.includes('surg')) return /surg/i.test(eName);
+          // Fall through to all facilities
+        }
+        return true;
+      }).map(e => ({
+        name: e.name,
+        lat: e.geocodedCoordinate.latitude,
+        lng: e.geocodedCoordinate.longitude,
+        address: e.address ? `${e.address.line1}, ${e.address.city}` : '',
+        type: e.name?.match(/Urgent|Same-Day/i) ? 'urgent' : e.name?.match(/Hospital/i) ? 'hospital' : 'specialty'
+      }));
+
+      if (injected.length > 0) {
+        runGeo.bhLocations = injected;
+        console.log(`[Map] Auto-injected ${injected.length} BH locations from cache (keyword: ${keyword || 'all'})`);
+      }
+    }
+  }
+
   const hasGeoData = runGeo.origin || runGeo.bhLocations.length > 0 || runGeo.competitors.length > 0;
   console.log(`[Map] Pre-filter: ${runGeo.bhLocations.length} BH, ${runGeo.competitors.length} comp, isochrone=${!!runGeo.isochrone} (${runGeo.isochrone?.features?.length || 0} features), wantsMap=${wantsMap}`);
   if (hasGeoData && (wantsMap || runGeo.isochrone)) {
@@ -1757,11 +1802,14 @@ async function runAgentLoop(sessionId, userMessage, res) {
     let bhFiltered = runGeo.bhLocations;
     let compFiltered = runGeo.competitors;
 
+    let bhOutsideRadius = []; // BH locations that were filtered out — agent should mention these
+
     if (runGeo.isochrone && runGeo.isochrone.features?.length > 0) {
       // ISOCHRONE EXISTS: filter pins to only those INSIDE the polygon
       bhFiltered = runGeo.bhLocations.filter(l => pointInIsochrone(l.lat, l.lng, runGeo.isochrone));
+      bhOutsideRadius = runGeo.bhLocations.filter(l => !pointInIsochrone(l.lat, l.lng, runGeo.isochrone));
       compFiltered = runGeo.competitors.filter(c => pointInIsochrone(c.lat, c.lng, runGeo.isochrone));
-      console.log(`[Map] Isochrone filter: ${runGeo.bhLocations.length} BH → ${bhFiltered.length} inside | ${runGeo.competitors.length} comp → ${compFiltered.length} inside`);
+      console.log(`[Map] Isochrone filter: ${runGeo.bhLocations.length} BH → ${bhFiltered.length} inside, ${bhOutsideRadius.length} outside | ${runGeo.competitors.length} comp → ${compFiltered.length} inside`);
     } else if (runGeo.origin) {
       // NO ISOCHRONE: use distance radius
       // "near" = 5mi, explicit miles = user value, default = 10mi
@@ -1813,10 +1861,19 @@ async function runAgentLoop(sessionId, userMessage, res) {
       bhLocations: bhFiltered,
       competitors: compFiltered,
       isochrone: runGeo.isochrone,
-      catchmentZips: runGeo.catchmentZips || null
+      catchmentZips: runGeo.catchmentZips || null,
+      bhOutsideRadius: bhOutsideRadius.length > 0 ? bhOutsideRadius : null
     };
     sendSSE(res, 'map_data', mapData);
-    console.log(`[Map] Sent: ${bhFiltered.length} BH + ${compFiltered.length} competitors${runGeo.isochrone ? ' + isochrone' : ''}`);
+    console.log(`[Map] Sent: ${bhFiltered.length} BH + ${compFiltered.length} competitors${runGeo.isochrone ? ' + isochrone' : ''}${bhOutsideRadius.length > 0 ? ` (${bhOutsideRadius.length} BH outside radius)` : ''}`);
+
+    // If BH locations were filtered out, append a note to the response so the agent can inform the user
+    if (bhOutsideRadius.length > 0) {
+      const outsideNames = bhOutsideRadius.map(l => l.name).join(', ');
+      const note = `\n\n> **Note:** ${bhOutsideRadius.length} additional BH location${bhOutsideRadius.length > 1 ? 's' : ''} (${outsideNames}) ${bhOutsideRadius.length > 1 ? 'are' : 'is'} outside the drive-time radius and ${bhOutsideRadius.length > 1 ? 'are' : 'is'} not shown on the map.`;
+      fullText += note;
+      sendSSE(res, 'delta', { text: note });
+    }
   }
 
   // Send choropleth data if heat map was generated
@@ -1865,6 +1922,26 @@ app.get('/api/zcta-geojson', (req, res) => {
   if (!zctaGeoJSON) return res.status(404).json({ error: 'ZCTA GeoJSON not available. Run: node scripts/build-zcta-geojson.js' });
   res.set('Cache-Control', 'public, max-age=86400');
   res.json(zctaGeoJSON);
+});
+
+// ── County Boundaries GeoJSON Endpoint ────────────────────────────────────
+let countyGeoJSON = null;
+try {
+  countyGeoJSON = JSON.parse(fs.readFileSync(path.join(__dirname, 'data', 'counties-south-florida.geojson'), 'utf8'));
+  console.log(`  County boundaries: ${countyGeoJSON.features.length} counties loaded`);
+} catch (e) { console.warn('  County boundaries: not available'); }
+
+app.get('/api/county-geojson', (req, res) => {
+  if (!countyGeoJSON) return res.status(404).json({ error: 'County GeoJSON not available' });
+  res.set('Cache-Control', 'public, max-age=86400');
+  res.json(countyGeoJSON);
+});
+
+// ── Mapbox Token Endpoint ──────────────────────────────────────────────────
+app.get('/api/mapbox-token', (req, res) => {
+  const token = process.env.MAPBOX_ACCESS_TOKEN;
+  if (!token) return res.status(500).json({ error: 'MAPBOX_ACCESS_TOKEN not configured' });
+  res.json({ token });
 });
 
 // ── API Endpoint ────────────────────────────────────────────────────────────

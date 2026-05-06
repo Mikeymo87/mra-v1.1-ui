@@ -248,6 +248,10 @@ WHEN TO USE DEEP PULL vs QUICK RATINGS:
 - Quick check (star rating, count, comparison) → Competitor Ratings (Google Places)
 - Review text, sentiment, names, themes, dates → Google Reviews Deep Pull (Outscraper)
 
+BH LOCATIONS ON MAP — MANDATORY:
+- When the query mentions BH, Baptist Health, or ANY service line (urgent care, hospital, imaging, primary care, etc.), BH locations MUST appear on the map alongside competitors. The server auto-injects BH facilities from cache if your tool calls didn't return them.
+- If some BH locations fall outside the drive-time radius, ALWAYS mention them: "X additional BH locations (names) are just outside the 15-minute radius." Never silently drop BH locations — the user needs to know what's nearby even if slightly outside range.
+
 EFFICIENCY RULES:
 - NEVER re-geocode a location that already has coordinates (from Yext or Places API).
 - Use Places Text Search coordinates for competitor map pins — skip Geocode tool.

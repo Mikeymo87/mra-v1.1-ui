@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MRA Marker Options</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #f5f5f5; padding: 32px; color: #25282A; }
+  h1 { font-size: 24px; margin-bottom: 8px; }
+  h2 { font-size: 18px; margin: 32px 0 16px; color: #2EA84A; }
+  h3 { font-size: 14px; margin: 24px 0 12px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; }
+  .subtitle { color: #6b7280; margin-bottom: 32px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 24px; }
+  .card { background: white; border-radius: 12px; padding: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+  .card-title { font-weight: 700; font-size: 14px; margin-bottom: 16px; }
+  .markers { display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-end; }
+  .marker-group { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .marker-label { font-size: 10px; color: #9ca3af; text-align: center; max-width: 80px; }
+
+  /* ── Option A: Enhanced Circles with Glow ── */
+  .pin-circle { border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+  .pin-circle.bh { width: 28px; height: 28px; background: #2EA84A; border: 2.5px solid #1a6b2e; box-shadow: 0 2px 8px rgba(46,168,74,0.45), 0 0 0 3px rgba(46,168,74,0.15); }
+  .pin-circle.comp { width: 24px; height: 24px; background: #ef4444; border: 2.5px solid #991b1b; box-shadow: 0 2px 8px rgba(239,68,68,0.45), 0 0 0 3px rgba(239,68,68,0.15); }
+  .pin-circle.origin { width: 32px; height: 32px; background: #f59e0b; border: 2.5px solid #b45309; box-shadow: 0 2px 8px rgba(245,158,11,0.45), 0 0 0 3px rgba(245,158,11,0.15); }
+  .pin-circle svg { width: 14px; height: 14px; fill: white; }
+
+  /* ── Option B: Map Pin / Teardrop ── */
+  .pin-tear { position: relative; width: 30px; height: 42px; }
+  .pin-tear-body { width: 30px; height: 30px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); display: flex; align-items: center; justify-content: center; position: absolute; top: 0; left: 0; }
+  .pin-tear-body svg { transform: rotate(45deg); width: 14px; height: 14px; fill: white; }
+  .pin-tear-body.bh { background: #2EA84A; box-shadow: 0 3px 10px rgba(46,168,74,0.5); }
+  .pin-tear-body.comp { background: #ef4444; box-shadow: 0 3px 10px rgba(239,68,68,0.5); }
+  .pin-tear-body.comp2 { background: #6366f1; box-shadow: 0 3px 10px rgba(99,102,241,0.5); }
+  .pin-tear-body.comp3 { background: #f97316; box-shadow: 0 3px 10px rgba(249,115,22,0.5); }
+  .pin-tear-body.origin { background: #f59e0b; box-shadow: 0 3px 10px rgba(245,158,11,0.5); }
+  .pin-tear-shadow { width: 16px; height: 6px; background: rgba(0,0,0,0.15); border-radius: 50%; position: absolute; bottom: 0; left: 7px; }
+
+  /* ── Option C: Badge / Shield ── */
+  .pin-badge { width: 32px; height: 38px; position: relative; display: flex; align-items: center; justify-content: center; }
+  .pin-badge-body { width: 32px; height: 32px; border-radius: 8px 8px 8px 0; display: flex; align-items: center; justify-content: center; position: relative; }
+  .pin-badge-body::after { content: ''; position: absolute; bottom: -6px; left: 0; width: 0; height: 0; border-left: 8px solid transparent; border-right: 8px solid transparent; }
+  .pin-badge-body.bh { background: #2EA84A; box-shadow: 0 3px 12px rgba(46,168,74,0.4); }
+  .pin-badge-body.bh::after { border-top: 6px solid #2EA84A; }
+  .pin-badge-body.comp { background: #ef4444; box-shadow: 0 3px 12px rgba(239,68,68,0.4); }
+  .pin-badge-body.comp::after { border-top: 6px solid #ef4444; }
+  .pin-badge-body svg { width: 16px; height: 16px; fill: white; }
+
+  /* ── Option D: Labeled Pill ── */
+  .pin-pill { display: flex; align-items: center; gap: 4px; padding: 4px 10px 4px 6px; border-radius: 20px; font-size: 11px; font-weight: 700; color: white; white-space: nowrap; }
+  .pin-pill.bh { background: #2EA84A; box-shadow: 0 2px 8px rgba(46,168,74,0.4); }
+  .pin-pill.comp { background: #ef4444; box-shadow: 0 2px 8px rgba(239,68,68,0.4); }
+  .pin-pill svg { width: 12px; height: 12px; fill: white; flex-shrink: 0; }
+
+  /* ── Rating badge ── */
+  .rating-badge { display: flex; align-items: center; gap: 2px; background: rgba(0,0,0,0.75); color: #fbbf24; font-size: 10px; font-weight: 700; padding: 2px 5px; border-radius: 4px; position: absolute; top: -8px; right: -12px; }
+  .rating-badge svg { width: 8px; height: 8px; fill: #fbbf24; }
+
+  /* ── Physician icons ── */
+  .pin-physician { width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 2px solid; }
+  .pin-physician.bh { background: white; border-color: #2EA84A; box-shadow: 0 2px 6px rgba(46,168,74,0.3); }
+  .pin-physician.bh svg { fill: #2EA84A; }
+  .pin-physician.comp { background: white; border-color: #ef4444; box-shadow: 0 2px 6px rgba(239,68,68,0.3); }
+  .pin-physician.comp svg { fill: #ef4444; }
+
+  /* ── Competitor color system ── */
+  .comp-colors { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+  .comp-swatch { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #4b5563; }
+  .comp-dot { width: 16px; height: 16px; border-radius: 50%; border: 2px solid rgba(0,0,0,0.15); }
+
+  .section-divider { border: none; border-top: 1px solid #e5e7eb; margin: 32px 0; }
+
+  .dark-demo { background: #1a1a2e; padding: 24px; border-radius: 12px; }
+  .dark-demo .markers { background: rgba(255,255,255,0.05); padding: 16px; border-radius: 8px; }
+</style>
+</head>
+<body>
+
+<h1>MRA Map Marker Options</h1>
+<p class="subtitle">Pick a style (or mix elements). Each option shows: BH facility, competitor facility, physician, origin, and hover-rating.</p>
+
+<!-- SVG Icons used throughout -->
+<svg style="display:none">
+  <defs>
+    <!-- Hospital / Medical Cross -->
+    <symbol id="icon-hospital" viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-2 10h-4v4h-2v-4H7v-2h4V7h2v4h4v2z"/></symbol>
+    <!-- Stethoscope / Person (Physician) -->
+    <symbol id="icon-physician" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></symbol>
+    <!-- Star -->
+    <symbol id="icon-star" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></symbol>
+    <!-- Location Pin -->
+    <symbol id="icon-pin" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></symbol>
+    <!-- Urgent Care / Lightning -->
+    <symbol id="icon-urgent" viewBox="0 0 24 24"><path d="M7 2v11h3v9l7-12h-4l4-8z"/></symbol>
+    <!-- Building -->
+    <symbol id="icon-building" viewBox="0 0 24 24"><path d="M15 11V5l-3-3-3 3v2H3v14h18V11h-6zm-8 8H5v-2h2v2zm0-4H5v-2h2v2zm0-4H5V9h2v2zm6 8h-2v-2h2v2zm0-4h-2v-2h2v2zm0-4h-2V9h2v2zm0-4h-2V5h2v2zm6 12h-2v-2h2v2zm0-4h-2v-2h2v2z"/></symbol>
+  </defs>
+</svg>
+
+<h2>Option A: Enhanced Circles with Glow + Shadow</h2>
+<p style="color:#6b7280;font-size:13px;margin-bottom:16px;">Closest to current design but with depth — glowing halos, inner icons, and drop shadows.</p>
+<div class="grid">
+  <div class="card">
+    <div class="card-title">Facilities</div>
+    <div class="markers">
+      <div class="marker-group">
+        <div class="pin-circle bh"><svg><use href="#icon-hospital"/></svg></div>
+        <div class="marker-label">BH Facility</div>
+      </div>
+      <div class="marker-group">
+        <div class="pin-circle bh" style="width:24px;height:24px;background:#2EA84A;"><svg style="width:12px;height:12px;"><use href="#icon-urgent"/></svg></div>
+        <div class="marker-label">BH Urgent Care</div>
+      </div>
+      <div class="marker-group">
+        <div class="pin-circle comp"><svg><use href="#icon-hospital"/></svg></div>
+        <div class="marker-label">Competitor</div>
+      </div>
+      <div class="marker-group">
+        <div style="position:relative;">
+          <div class="pin-circle comp"><svg><use href="#icon-hospital"/></svg></div>
+          <div class="rating-badge"><svg><use href="#icon-star"/></svg>4.2</div>
+        </div>
+        <div class="marker-label">With Rating</div>
+      </div>
+      <div class="marker-group">
+        <div class="pin-circle origin"><svg><use href="#icon-pin"/></svg></div>
+        <div class="marker-label">Origin</div>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">Physicians</div>
+    <div class="markers">
+      <div class="marker-group">
+        <div class="pin-physician bh"><svg style="width:12px;height:12px;"><use href="#icon-physician"/></svg></div>
+        <div class="marker-label">BH Physician</div>
+      </div>
+      <div class="marker-group">
+        <div class="pin-physician comp"><svg style="width:12px;height:12px;"><use href="#icon-physician"/></svg></div>
+        <div class="marker-label">Competitor Physician</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<hr class="section-divider">
+
+<h2>Option B: Teardrop Pins</h2>
+<p style="color:#6b7280;font-size:13px;margin-bottom:16px;">Classic map pin shape with a ground shadow. Strong visual hierarchy — stands out on any basemap.</p>
+<div class="grid">
+  <div class="card">
+    <div class="card-title">Facilities</div>
+    <div class="markers" style="align-items:flex-start;padding-bottom:8px;">
+      <div class="marker-group">
+        <div class="pin-tear">
+          <div class="pin-tear-body bh"><svg><use href="#icon-hospital"/></svg></div>
+          <div class="pin-tear-shadow"></div>
+        </div>
+        <div class="marker-label">BH Hospital</div>
+      </div>
+      <div class="marker-group">
+        <div class="pin-tear">
+          <div class="pin-tear-body bh"><svg><use href="#icon-urgent"/></svg></div>
+          <div class="pin-tear-shadow"></div>
+        </div>
+        <div class="marker-label">BH Urgent Care</div>
+      </div>
+      <div class="marker-group">
+        <div class="pin-tear">
+          <div class="pin-tear-body comp"><svg><use href="#icon-hospital"/></svg></div>
+          <div class="pin-tear-shadow"></div>
+        </div>
+        <div class="marker-label">Competitor A</div>
+      </div>
+      <div class="marker-group">
+        <div class="pin-tear">
+          <div class="pin-tear-body comp2"><svg><use href="#icon-hospital"/></svg></div>
+          <div class="pin-tear-shadow"></div>
+        </div>
+        <div class="marker-label">Competitor B</div>
+      </div>
+      <div class="marker-group">
+        <div class="pin-tear">
+          <div class="pin-tear-body comp3"><svg><use href="#icon-hospital"/></svg></div>
+          <div class="pin-tear-shadow"></div>
+        </div>
+        <div class="marker-label">Competitor C</div>
+      </div>
+      <div class="marker-group">
+        <div class="pin-tear">
+          <div class="pin-tear-body origin"><svg><use href="#icon-pin"/></svg></div>
+          <div class="pin-tear-shadow"></div>
+        </div>
+        <div class="marker-label">Origin</div>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">Physicians (smaller, open circle)</div>
+    <div class="markers" style="padding-bottom:8px;">
+      <div class="marker-group">
+        <div class="pin-physician bh" style="width:20px;height:20px;"><svg style="width:11px;height:11px;"><use href="#icon-physician"/></svg></div>
+        <div class="marker-label">BH Affiliated</div>
+      </div>
+      <div class="marker-group">
+        <div class="pin-physician comp" style="width:20px;height:20px;"><svg style="width:11px;height:11px;"><use href="#icon-physician"/></svg></div>
+        <div class="marker-label">Non-Affiliated</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<hr class="section-divider">
+
+<h2>Option C: Badge / Shield</h2>
+<p style="color:#6b7280;font-size:13px;margin-bottom:16px;">Rounded-square badge with a pointer. Feels professional, works well for dense markets.</p>
+<div class="grid">
+  <div class="card">
+    <div class="card-title">Facilities</div>
+    <div class="markers" style="padding-bottom:12px;">
+      <div class="marker-group">
+        <div class="pin-badge"><div class="pin-badge-body bh"><svg><use href="#icon-hospital"/></svg></div></div>
+        <div class="marker-label">BH Facility</div>
+      </div>
+      <div class="marker-group">
+        <div class="pin-badge"><div class="pin-badge-body bh"><svg><use href="#icon-urgent"/></svg></div></div>
+        <div class="marker-label">BH Urgent</div>
+      </div>
+      <div class="marker-group">
+        <div class="pin-badge"><div class="pin-badge-body comp"><svg><use href="#icon-hospital"/></svg></div></div>
+        <div class="marker-label">Competitor</div>
+      </div>
+      <div class="marker-group">
+        <div style="position:relative;">
+          <div class="pin-badge"><div class="pin-badge-body comp"><svg><use href="#icon-hospital"/></svg></div></div>
+          <div class="rating-badge" style="top:-10px;right:-14px;"><svg><use href="#icon-star"/></svg>3.8</div>
+        </div>
+        <div class="marker-label">With Rating</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<hr class="section-divider">
+
+<h2>Option D: Labeled Pills</h2>
+<p style="color:#6b7280;font-size:13px;margin-bottom:16px;">Shows the name right on the marker — no click needed to identify. Best for low-density maps.</p>
+<div class="grid">
+  <div class="card">
+    <div class="card-title">Facilities with names</div>
+    <div class="markers" style="flex-direction:column;align-items:flex-start;gap:8px;">
+      <div class="pin-pill bh"><svg><use href="#icon-hospital"/></svg>BH Pembroke Pines</div>
+      <div class="pin-pill bh"><svg><use href="#icon-urgent"/></svg>BH Urgent Care | Davie</div>
+      <div class="pin-pill comp"><svg><use href="#icon-building"/></svg>Memorial Miramar</div>
+      <div class="pin-pill" style="background:#6366f1;box-shadow:0 2px 8px rgba(99,102,241,0.4);"><svg><use href="#icon-building"/></svg>Mount Sinai</div>
+    </div>
+  </div>
+</div>
+
+<hr class="section-divider">
+
+<h2>Competitor Color System</h2>
+<p style="color:#6b7280;font-size:13px;margin-bottom:16px;">Each competitor health system gets a consistent color — always the same across every query.</p>
+<div class="card" style="max-width:600px;">
+  <div class="card-title">Proposed System Color Palette</div>
+  <div class="comp-colors">
+    <div class="comp-swatch"><div class="comp-dot" style="background:#ef4444;"></div>Memorial Healthcare</div>
+    <div class="comp-swatch"><div class="comp-dot" style="background:#6366f1;"></div>Mount Sinai</div>
+    <div class="comp-swatch"><div class="comp-dot" style="background:#f97316;"></div>HCA Florida</div>
+    <div class="comp-swatch"><div class="comp-dot" style="background:#8b5cf6;"></div>Cleveland Clinic FL</div>
+    <div class="comp-swatch"><div class="comp-dot" style="background:#ec4899;"></div>Nicklaus Children's</div>
+    <div class="comp-swatch"><div class="comp-dot" style="background:#14b8a6;"></div>UHealth / Jackson</div>
+    <div class="comp-swatch"><div class="comp-dot" style="background:#64748b;"></div>Independent / Other</div>
+  </div>
+  <p style="font-size:11px;color:#9ca3af;margin-top:12px;">Colors are deterministic — hashed from system name so the same system always gets the same color.</p>
+</div>
+
+<hr class="section-divider">
+
+<h2>Hover: Star Rating Tooltip</h2>
+<p style="color:#6b7280;font-size:13px;margin-bottom:16px;">On hover, show a compact card with rating stars, review count, and facility type.</p>
+<div class="card" style="max-width:400px;">
+  <div style="background:white;border:1px solid #e5e7eb;border-radius:10px;padding:12px 16px;box-shadow:0 4px 16px rgba(0,0,0,0.12);font-family:-apple-system,sans-serif;">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+      <div style="width:10px;height:10px;border-radius:50%;background:#ef4444;flex-shrink:0;"></div>
+      <div style="font-weight:700;font-size:14px;color:#25282A;">Memorial Hospital Miramar</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:4px;margin-bottom:4px;">
+      <span style="color:#fbbf24;font-size:13px;">&#9733;&#9733;&#9733;&#9733;&#9734;</span>
+      <span style="font-weight:700;font-size:13px;color:#25282A;">4.1</span>
+      <span style="font-size:12px;color:#6b7280;">(2,847 reviews)</span>
+    </div>
+    <div style="font-size:11px;color:#6b7280;">Hospital &middot; 1901 SW 172nd Ave, Miramar</div>
+    <div style="font-size:11px;color:#9ca3af;margin-top:4px;">Memorial Healthcare System</div>
+  </div>
+</div>
+
+</body>
+</html>
