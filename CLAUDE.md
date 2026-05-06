@@ -6,6 +6,7 @@ Baptist Health South Florida Market Research Agent. A Claude Sonnet-powered chat
 ## Architecture
 - `server.js` — Express backend, Anthropic SDK with tool_use, SSE streaming, 9 tool executors
 - `system-prompt.txt` — 35K char system prompt with 7 structured workflows
+- `prompts/` — Modular prompt directory (core, reference-data, 7 workflows + intercept-writer)
 - `public/index.html` — Chat UI with SSE streaming, markdown rendering, cache-clear-on-refresh
 - `MRA-CAPABILITIES.md` — Handoff doc for Marketing Plan GPT
 - `.env` — 7 API keys (ANTHROPIC, YEXT, CENSUS, OPENAI, GOOGLE_MAPS, OUTSCRAPER, ORS) — never commit
@@ -73,7 +74,18 @@ Cardio (359) | Vascular (120) | Orthop (285) | Neuro (468) | Oncol (373) | Famil
 - Sub-specialty physicians (Breast, Maternal-Fetal, etc.) not in Yext
 - Model is claude-sonnet-4-6 (current)
 
+## Sub-Agents
+
+### MRA Newsletter (currently "INTERCEPT" — name may change)
+- **Prompt:** `prompts/workflow-pulse.txt` (the newsletter writer agent)
+- **Output repo:** [Mikeymo87/MRA-Newsletter](https://github.com/Mikeymo87/MRA-Newsletter) (`~/Desktop/Claude/MRA-Newsletter/`)
+- **What it does:** Produces a weekly HTML briefing for BH MarCom — competitive intel, permit tracking, M&A, policy, AI/marketing tech, and strategic insights. Uses this MRA's `web_research` and `read_page` tools for data gathering.
+- **7 sections:** POA News, Competitive Intel (incl. Steward Watch), AI & Marketing Tech, Permits, M&A Watch, Policy & Macro, Insights to Think About
+- **Schedule:** Monday morning, covering the prior Mon 12am – Sun 11:59pm
+- **Status:** v1 prototype built (Vol. 1 Issue 01, Apr 27 – May 3 2026). n8n automation next.
+
 ## What's Next
+- INTERCEPT: wire to n8n for automated weekly generation
 - Marketing Plan GPT integration (handoff doc delivered)
 - Add loading/thinking indicator to UI
 - Remove client-side Yext pre-load (API key exposed in browser)
