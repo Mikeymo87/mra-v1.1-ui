@@ -2,4 +2,6 @@ node_modules/
 .DS_Store
 .env
 data/mra-ledger.db
+data/mra-ledger.db-wal
+data/mra-ledger.db-shm
 data/census-cache.json
