@@ -146,6 +146,8 @@ function classifyIntent(query) {
     intents.add('psychographic');
   if (/new\s*facility|cannibali|feeder|referral\s*corridor|overlap.*feeder/i.test(q))
     intents.add('facility');
+  if (/permit|construction|ahca|building\s*permit|facility\s*filing|what.*being\s*built|who.*building|new.*hospital|expansion|broke\s*ground/i.test(q))
+    intents.add('competitive');
   if (/trade\s*area|define.*area|what\s*zips|which\s*zips|zips\s*(near|around|within)/i.test(q))
     intents.add('trade_area');
 
@@ -525,6 +527,22 @@ const tools = [
         label: { type: 'string', description: 'Label text for highlight command' }
       },
       required: ['command']
+    }
+  },
+  {
+    name: 'lookup_permits',
+    description: 'Queries the persistent permit & construction tracker for healthcare projects in our 4-county Primary Service Area (Miami-Dade, Broward, Palm Beach, Monroe). Returns active permits, AHCA filings, and construction projects from the SQLite database. Use for Insight Miner newsletter Section 4, competitive intelligence, or any permit/construction question. Shows what is NEW and UPDATED since a given date.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        county: { type: 'string', description: 'Filter by county.', enum: ['Miami-Dade', 'Broward', 'Palm Beach', 'Monroe'] },
+        health_system: { type: 'string', description: 'Filter by health system name (partial match). Examples: "HCA", "Cleveland Clinic", "Baptist Health", "Memorial".' },
+        status: { type: 'string', description: 'Filter by permit status.', enum: ['new', 'application_filed', 'approved', 'under_construction', 'completed', 'denied', 'withdrawn'] },
+        active_only: { type: 'boolean', description: 'If true (default), only return active projects. Set false to include completed/denied/withdrawn.' },
+        since_date: { type: 'string', description: 'ISO date (YYYY-MM-DD). Tags results as NEW/UPDATED/UNCHANGED relative to this date. Use for newsletter delta detection — pass the date of the previous issue.' },
+        include_history: { type: 'boolean', description: 'If true, include status change history for each permit.' }
+      },
+      required: []
     }
   }
 ];
@@ -1456,6 +1474,61 @@ async function executeTool(name, input) {
         return result;
       }
 
+      case 'lookup_permits': {
+        const { db: permitDb } = require('./db');
+        let where = [];
+        let params = [];
+
+        if (input.county) { where.push('county = ?'); params.push(input.county); }
+        if (input.health_system) { where.push('health_system LIKE ?'); params.push(`%${input.health_system}%`); }
+        if (input.status) { where.push('status = ?'); params.push(input.status); }
+        if (input.active_only !== false) { where.push('is_active = 1'); }
+        if (input.since_date) {
+          where.push('(first_seen_date >= ? OR last_status_change_date >= ?)');
+          params.push(input.since_date, input.since_date);
+        }
+
+        const whereClause = where.length > 0 ? `WHERE ${where.join(' AND ')}` : '';
+        const permits = permitDb.prepare(
+          `SELECT * FROM permits ${whereClause} ORDER BY last_status_change_date DESC, first_seen_date DESC`
+        ).all(...params);
+
+        const sinceDate = input.since_date || '1970-01-01';
+        for (const p of permits) {
+          if (p.first_seen_date >= sinceDate) {
+            p._delta = 'NEW';
+          } else if (p.last_status_change_date && p.last_status_change_date >= sinceDate) {
+            p._delta = 'UPDATED';
+          } else {
+            p._delta = 'UNCHANGED';
+          }
+        }
+
+        if (input.include_history) {
+          const histStmt = permitDb.prepare('SELECT * FROM permit_history WHERE permit_id = ? ORDER BY changed_date DESC');
+          for (const p of permits) {
+            p._history = histStmt.all(p.permit_id);
+          }
+        }
+
+        const summary = {
+          total: permits.length,
+          new: permits.filter(p => p._delta === 'NEW').length,
+          updated: permits.filter(p => p._delta === 'UPDATED').length,
+          by_county: {},
+          by_system: {}
+        };
+        for (const p of permits) {
+          summary.by_county[p.county] = (summary.by_county[p.county] || 0) + 1;
+          if (p.health_system) summary.by_system[p.health_system] = (summary.by_system[p.health_system] || 0) + 1;
+        }
+
+        return envelope('MRA Permit Tracker', 'mra-ledger.db/permits', timestamp,
+          { summary, permits },
+          { query: { county: input.county, health_system: input.health_system, status: input.status, since_date: input.since_date } }
+        );
+      }
+
       default:
         return envelope('Unknown', 'N/A', timestamp, { error: `Unknown tool: ${name}` });
     }
@@ -1623,7 +1696,7 @@ async function runAgentLoop(sessionId, userMessage, res) {
 
     const stream = anthropic.messages.stream({
       model: 'claude-sonnet-4-6',
-      max_tokens: 4096,
+      max_tokens: 8192,
       system: systemPrompt,
       messages: session.messages,
       tools
@@ -1944,6 +2017,290 @@ app.get('/api/mapbox-token', (req, res) => {
   res.json({ token });
 });
 
+// ── Permit Refresh Endpoint ─────────────────────────────────────────────────
+
+app.post('/api/refresh-permits', async (req, res) => {
+  console.log('[Permits] Refresh triggered');
+  try {
+    const { refreshPermits } = require('./scripts/refresh-permits');
+    const result = await refreshPermits();
+    res.json(result);
+  } catch (err) {
+    console.error('[Permits] Refresh error:', err.message);
+    res.status(500).json({ status: 'error', message: err.message });
+  }
+});
+
+// ── Newsletter Generation Endpoint ──────────────────────────────────────────
+
+app.post('/api/generate-newsletter', async (req, res) => {
+  const startTime = Date.now();
+  console.log('\n═══ Newsletter Generation Started ═══');
+  console.log(`Time: ${new Date().toISOString()}`);
+
+  // Extended timeout — newsletter generation takes 5-10 min
+  req.setTimeout(600000);
+  res.setTimeout(600000);
+
+  try {
+    // Step 1: Refresh permits (only if last refresh was 25+ days ago, or force=true)
+    const { db: permitDb } = require('./db');
+    const lastRun = permitDb.prepare("SELECT run_date FROM scraper_runs WHERE status IN ('success','partial') ORDER BY run_date DESC LIMIT 1").get();
+    const daysSinceRefresh = lastRun ? (Date.now() - new Date(lastRun.run_date).getTime()) / 86400000 : 999;
+    const forceRefresh = req.body?.force_permits === true;
+
+    let permitResult = { status: 'skipped', total_active: permitDb.prepare('SELECT COUNT(*) as n FROM permits WHERE is_active=1').get().n };
+
+    if (forceRefresh || daysSinceRefresh >= 25) {
+      console.log(`[Newsletter] Step 1: Refreshing permits (last refresh: ${Math.round(daysSinceRefresh)} days ago)...`);
+      const { refreshPermits } = require('./scripts/refresh-permits');
+      permitResult = await refreshPermits();
+      console.log(`[Newsletter] Permits refreshed: ${permitResult.new} new, ${permitResult.updated} updated, ${permitResult.total_active} active`);
+    } else {
+      console.log(`[Newsletter] Step 1: Skipping permit refresh (last refresh: ${Math.round(daysSinceRefresh)} days ago, ${permitResult.total_active} active permits in database)`);
+    }
+
+    // Step 2: Build the newsletter generation prompt
+    const today = new Date();
+    const cycleEnd = new Date(today);
+    cycleEnd.setDate(cycleEnd.getDate() - cycleEnd.getDay()); // Last Sunday
+    const cycleStart = new Date(cycleEnd);
+    cycleStart.setDate(cycleStart.getDate() - 13); // Two weeks back
+
+    const formatDate = (d) => d.toISOString().split('T')[0];
+    const formatDisplay = (d) => d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+
+    const generationPrompt = `You are generating the Insight Miner bi-weekly newsletter for: ${formatDisplay(cycleStart)} – ${formatDisplay(cycleEnd)}.
+
+TASK: Research all 7 sections, then output a COMPLETE JSON object with the content for each section. Do NOT output HTML — output structured JSON that I will merge into the HTML template.
+
+Research window: ${formatDisplay(cycleStart)} through ${formatDisplay(cycleEnd)}.
+Since date for permit deltas: ${formatDate(cycleStart)}
+Today's date: ${formatDisplay(today)}
+
+STEP 1: Research. Use web_research and read_page to gather fresh stories for ALL 7 sections:
+  1. PRIMARY SERVICE AREA NEWS — EXTERNAL market stories only. Competitor moves, payer disputes, healthcare real estate, regulatory actions. NEVER include Baptist Health's own projects here — those go in Section 4 (Permits).
+  2. COMPETITIVE INTELLIGENCE — Who's building, buying, positioning. CapEx data. Threat assessments. Steward watch.
+  3. AI & MARKETING TECHNOLOGY — Healthcare AI, marketing AI, tools competitors are deploying.
+  4. PERMIT & CONSTRUCTION TRACKER — Call lookup_permits with since_date="${formatDate(cycleStart)}" and include_history=true.
+  5. MERGERS & ACQUISITIONS — Hospital + physician practice deals. Private equity activity. Florida focus.
+  6. POLICY & MACRO — Coverage changes, reimbursement, Medicaid/Medicare policy shifts.
+  7. INSIGHTS TO THINK ABOUT — 5-7 strategic provocations for marketing leadership.
+
+STEP 2: After ALL research is complete, output a single JSON object with this exact structure:
+{
+  "issue_date_range": "April 21 – May 4, 2026",
+  "vol_issue": "Vol. 1 — Issue 02",
+  "hero_headline": "Main attention-grabbing headline with <em>emphasis part</em>",
+  "exec_summary": ["bullet 1", "bullet 2", "bullet 3", "bullet 4", "bullet 5"],
+  "stats": [
+    {"num": "7", "label": "description"},
+    {"num": "$2.1B", "label": "description"},
+    {"num": "22", "label": "description"},
+    {"num": "1.5M", "label": "description"}
+  ],
+  "sections": {
+    "s1_psa_news": {
+      "subtitle": "section subtitle",
+      "stories": [
+        {
+          "type": "threat|watch|opp|neutral",
+          "tag_text": "Tag Label",
+          "tag_color": "red|yellow|blue|gray",
+          "headline": "Story headline",
+          "body_html": "<p>Story body with <strong>bold</strong> as needed.</p>",
+          "marketing_impact_html": "<p>Impact analysis.</p>",
+          "impact_dots": 4,
+          "sources_html": "<a href='url'>Source Name</a>, <a href='url'>Source 2</a>"
+        }
+      ]
+    },
+    "s2_competitive": {
+      "subtitle": "section subtitle",
+      "capex_chart": [{"label": "HCA Florida", "value": "$1.8B", "width_pct": 90, "color": "var(--coral)"}],
+      "stories": [same format as s1],
+      "fsed_cards": [{"system": "Name", "description": "details"}],
+      "steward_hospitals": [{"name": "...", "location": "...", "county": "..."}]
+    },
+    "s3_ai_tech": {
+      "subtitle": "...",
+      "stories": [same format],
+      "bottom_line_html": "<p>Summary callout text.</p>"
+    },
+    "s4_permits": {
+      "subtitle": "...",
+      "permits_table": [{"project": "...", "system": "...", "county": "...", "value": "...", "status": "...", "delta": "NEW|UPDATED|", "source_url": "..."}]
+    },
+    "s5_ma": {
+      "subtitle": "...",
+      "deal_count_headline": "...",
+      "stories": [same format],
+      "callout_html": "<p>...</p>"
+    },
+    "s6_policy": {
+      "subtitle": "...",
+      "metric_cards": [{"num": "1.5M", "description": "...", "color": "red|yellow|green"}],
+      "stories": [same format]
+    },
+    "s7_insights": {
+      "insights": [{"headline": "...", "body": "..."}]
+    }
+  }
+}
+
+RULES:
+- Section 1 is EXTERNAL news ONLY. Baptist Health projects, expansions, and groundbreakings belong in Section 4 (Permits), NOT Section 1.
+- Every story MUST have a marketing_impact_html field.
+- Every source MUST be a clickable <a href> link with the real URL.
+- Spell out all terms — no acronyms (only exception: BH).
+- Territory is "Primary Service Area" — never "POA".
+
+EFFICIENCY — YOU HAVE LIMITED ITERATIONS:
+- Batch multiple web_research calls in a SINGLE turn (call 3-4 at once, not one at a time).
+- Batch multiple read_page calls in a single turn too.
+- Complete ALL research within 5-6 turns. Then output the JSON in your final turn.
+- Do NOT do one tool call per turn — that wastes iterations and you will run out before producing output.
+- You MUST output the JSON object before your iterations run out. Research is useless without output.
+
+Output ONLY the JSON object. No markdown, no commentary, no code fences.`;
+
+    // Step 3: Run the agentic loop (non-streaming)
+    console.log('[Newsletter] Step 2: Running agentic loop...');
+
+    // Load insight-miner specific prompt (workflow-pulse.txt is separate from WORKFLOW_FILES)
+    let pulsePrompt = '';
+    try {
+      pulsePrompt = fs.readFileSync(path.join(PROMPT_DIR, 'workflow-pulse.txt'), 'utf8');
+    } catch (e) {
+      console.warn('[Newsletter] workflow-pulse.txt not found, using full system prompt');
+    }
+    const insightMinerPrompt = pulsePrompt
+      ? `${CORE_PROMPT}\n\n${REF_PROMPT}\n\n${pulsePrompt}`
+      : buildSystemPrompt('insight miner newsletter permit construction competitive ai policy');
+
+    const sessionId = `newsletter-${Date.now()}`;
+    const session = getSession(sessionId);
+    session.messages.push({ role: 'user', content: generationPrompt });
+
+    // Only expose research + permit tools — prevent agent from doing full MRA analysis
+    const newsletterTools = tools.filter(t =>
+      ['web_research', 'read_page', 'lookup_permits'].includes(t.name)
+    );
+
+    let fullText = '';
+    let iterations = 0;
+    let totalInputTokens = 0;
+    let totalOutputTokens = 0;
+    const MAX_NEWSLETTER_ITERATIONS = 12;
+
+    while (iterations < MAX_NEWSLETTER_ITERATIONS) {
+      iterations++;
+      console.log(`[Newsletter] Iteration ${iterations}...`);
+
+      const response = await anthropic.messages.create({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 16384,
+        system: insightMinerPrompt,
+        messages: session.messages,
+        tools: newsletterTools
+      });
+
+      totalInputTokens += response.usage?.input_tokens || 0;
+      totalOutputTokens += response.usage?.output_tokens || 0;
+
+      const assistantContent = response.content;
+      let textParts = [];
+      let toolCalls = [];
+
+      for (const block of assistantContent) {
+        if (block.type === 'text') textParts.push(block.text);
+        else if (block.type === 'tool_use') toolCalls.push(block);
+      }
+
+      session.messages.push({ role: 'assistant', content: assistantContent });
+
+      if (response.stop_reason === 'end_of_turn' || toolCalls.length === 0) {
+        fullText = textParts.join('');
+        break;
+      }
+
+      // Execute tool calls
+      const toolResults = [];
+      for (const toolCall of toolCalls) {
+        console.log(`  [Tool] ${toolCall.name}(${JSON.stringify(toolCall.input).slice(0, 100)})`);
+        const result = await executeTool(toolCall.name, toolCall.input);
+        toolResults.push({
+          type: 'tool_result',
+          tool_use_id: toolCall.id,
+          content: JSON.stringify(result)
+        });
+      }
+      session.messages.push({ role: 'user', content: toolResults });
+    }
+
+    // Step 4: Parse JSON from agent output
+    let jsonStr = fullText.trim();
+    // Strip code fences if present
+    const jsonMatch = jsonStr.match(/```(?:json)?\n?([\s\S]*?)```/);
+    if (jsonMatch) jsonStr = jsonMatch[1];
+    // Find the JSON object boundaries
+    const jsonStart = jsonStr.indexOf('{');
+    const jsonEnd = jsonStr.lastIndexOf('}');
+    if (jsonStart > -1 && jsonEnd > jsonStart) jsonStr = jsonStr.slice(jsonStart, jsonEnd + 1);
+
+    let data;
+    try {
+      data = JSON.parse(jsonStr);
+    } catch (parseErr) {
+      console.error('[Newsletter] JSON parse failed:', parseErr.message);
+      // Save raw output for debugging
+      const debugPath = path.join(__dirname, '..', 'MRA-Newsletter', `debug-raw-${formatDate(today)}.txt`);
+      fs.writeFileSync(debugPath, fullText, 'utf-8');
+      console.error(`[Newsletter] Raw output saved to ${debugPath}`);
+      throw new Error('Newsletter agent returned invalid JSON. Raw output saved for debugging.');
+    }
+
+    // Step 5: Build HTML using the prototype design template
+    const { buildNewsletterHtml } = require('./scripts/build-newsletter-html');
+    const html = buildNewsletterHtml(data, formatDisplay(cycleStart), formatDisplay(cycleEnd));
+
+    const filename = `insight-miner-${formatDate(today)}.html`;
+    const outputPath = path.join(__dirname, '..', 'MRA-Newsletter', filename);
+    fs.writeFileSync(outputPath, html, 'utf-8');
+    console.log(`[Newsletter] Saved: ${outputPath}`);
+
+    const duration = Date.now() - startTime;
+    const costCents = ((totalInputTokens * 3 / 1000000) + (totalOutputTokens * 15 / 1000000)) * 100;
+
+    // Log to ledger
+    const { insertRun, updateRun } = require('./db');
+    const runId = insertRun.run(sessionId, 'generate-newsletter', 'pulse', 'claude-sonnet-4-6').lastInsertRowid;
+    updateRun.run(iterations, totalInputTokens, totalOutputTokens, costCents, `Generated ${filename}`, runId);
+
+    console.log(`\n═══ Newsletter Generation Complete ═══`);
+    console.log(`Iterations: ${iterations} | Tokens: ${totalInputTokens} in / ${totalOutputTokens} out | Cost: ~$${(costCents/100).toFixed(2)} | Time: ${(duration/1000).toFixed(0)}s`);
+    console.log(`File: ${filename}\n`);
+
+    // Clean up session
+    sessions.delete(sessionId);
+
+    res.json({
+      status: 'success',
+      filename,
+      path: outputPath,
+      iterations,
+      tokens: { input: totalInputTokens, output: totalOutputTokens },
+      estimated_cost_cents: Math.round(costCents),
+      duration_ms: duration,
+      permits: permitResult
+    });
+
+  } catch (err) {
+    console.error('[Newsletter] Error:', err);
+    res.status(500).json({ status: 'error', message: err.message });
+  }
+});
+
 // ── API Endpoint ────────────────────────────────────────────────────────────
 
 app.post('/api/chat', async (req, res) => {
@@ -1997,7 +2354,7 @@ app.post('/webhook/market-research', async (req, res) => {
       iterations++;
       const response = await anthropic.messages.create({
         model: 'claude-sonnet-4-6',
-        max_tokens: 4096,
+        max_tokens: 8192,
         system: systemPrompt,
         messages: session.messages,
         tools

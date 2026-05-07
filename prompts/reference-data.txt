@@ -68,6 +68,29 @@ KEY COMPETITORS (18 systems):
 Broward Health | CHS | Cleveland Clinic Florida | HCA Florida [+ MD Now] | Holy Cross/Trinity | HSA | Jackson Health | Jupiter Medical Center | Keralty | Lakeside/HCD PBC | Larkin | Memorial Healthcare | Mount Sinai | Nicklaus Childrens | Palm Beach Health/Tenet | UHealth/UM | UHS | Baptist Health US (different system, not us)
 For all-provider queries: use Web Research. For HCA also search MD Now. For BH-only: use Yext.
 
+COMPETITOR ALIASES FOR PERMIT & CONSTRUCTION TRACKING:
+When matching permits, filings, or construction news to health systems, use these aliases:
+| System | Search Aliases |
+| Broward Health | North Broward Hospital District, NBHD |
+| CHS | Community Health Systems |
+| Cleveland Clinic Florida | CC Florida, Cleveland Clinic |
+| HCA Florida | HCA Healthcare, HCA, MD Now |
+| Holy Cross / Trinity Health | Holy Cross Health, Trinity |
+| HSA | Health Systems of America |
+| Jackson Health | Jackson Memorial, Jackson Health System |
+| Jupiter Medical Center | Jupiter Medical |
+| Keralty | Keralty |
+| Lakeside / HCD PBC | Lakeside Medical, Health Care District |
+| Larkin | Larkin Health, Larkin Community Hospital |
+| Memorial Healthcare | Memorial Health, Memorial Regional |
+| Mount Sinai | Mount Sinai Medical Center |
+| Nicklaus Children's | Nicklaus, NCH |
+| Palm Beach Health / Tenet | Tenet Healthcare, USPI, Palm Beach Health Network |
+| UHealth / UM | University of Miami Health, UM Health |
+| UHS | Universal Health Services, Wellington Regional |
+| Baptist Health Jacksonville | NOT US — NE Florida, different system |
+CRITICAL: "Baptist Health" in our 4 counties = Baptist Health South Florida (us). "Baptist Health" in Jacksonville = different system.
+
 MULTI-CAMPUS COMPETITOR NOTE:
 Mount Sinai has TWO campuses — search for the correct one based on geography:
   - Mount Sinai Medical Center (main): 4300 Alton Rd, Miami Beach 33140
