@@ -1940,10 +1940,15 @@ async function runAgentLoop(sessionId, userMessage, res) {
     sendSSE(res, 'map_data', mapData);
     console.log(`[Map] Sent: ${bhFiltered.length} BH + ${compFiltered.length} competitors${runGeo.isochrone ? ' + isochrone' : ''}${bhOutsideRadius.length > 0 ? ` (${bhOutsideRadius.length} BH outside radius)` : ''}`);
 
-    // If BH locations were filtered out, append a note to the response so the agent can inform the user
-    if (bhOutsideRadius.length > 0) {
-      const outsideNames = bhOutsideRadius.map(l => l.name).join(', ');
-      const note = `\n\n> **Note:** ${bhOutsideRadius.length} additional BH location${bhOutsideRadius.length > 1 ? 's' : ''} (${outsideNames}) ${bhOutsideRadius.length > 1 ? 'are' : 'is'} outside the drive-time radius and ${bhOutsideRadius.length > 1 ? 'are' : 'is'} not shown on the map.`;
+    // If BH locations were filtered out, mention only the closest 3 (not a wall of 30 names)
+    if (bhOutsideRadius.length > 0 && runGeo.origin) {
+      const withDist = bhOutsideRadius.map(l => ({
+        name: l.name.replace(/^Baptist Health\s*/i, 'BH '),
+        dist: haversineDistance(runGeo.origin.lat, runGeo.origin.lng, l.lat, l.lng)
+      })).sort((a, b) => a.dist - b.dist);
+      const closest = withDist.slice(0, 3);
+      const closestNames = closest.map(l => `${l.name} (${l.dist.toFixed(1)} mi)`).join(', ');
+      const note = `\n\n> **Note:** ${bhOutsideRadius.length} additional BH locations are outside the radius. Closest: ${closestNames}.`;
       fullText += note;
       sendSSE(res, 'delta', { text: note });
     }
