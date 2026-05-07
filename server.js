@@ -2070,46 +2070,52 @@ app.post('/api/refresh-permits', async (req, res) => {
   }
 });
 
-// ── Newsletter Generation Endpoint ──────────────────────────────────────────
+// ── Newsletter Generation (Async) ───────────────────────────────────────────
+// POST returns job ID immediately. Generation runs in background.
+// GET /api/newsletter-status/:jobId to poll for result.
 
-app.post('/api/generate-newsletter', async (req, res) => {
-  const startTime = Date.now();
-  console.log('\n═══ Newsletter Generation Started ═══');
-  console.log(`Time: ${new Date().toISOString()}`);
+const newsletterJobs = new Map();
 
-  // Extended timeout — newsletter generation takes 5-10 min
-  req.setTimeout(600000);
-  res.setTimeout(600000);
+app.post('/api/generate-newsletter', (req, res) => {
+  const jobId = `nl-${Date.now()}`;
+  const forceRefresh = req.body?.force_permits === true;
 
-  try {
-    // Step 1: Refresh permits (only if last refresh was 25+ days ago, or force=true)
-    const { db: permitDb } = require('./db');
-    const lastRun = permitDb.prepare("SELECT run_date FROM scraper_runs WHERE status IN ('success','partial') ORDER BY run_date DESC LIMIT 1").get();
-    const daysSinceRefresh = lastRun ? (Date.now() - new Date(lastRun.run_date).getTime()) / 86400000 : 999;
-    const forceRefresh = req.body?.force_permits === true;
+  newsletterJobs.set(jobId, { status: 'running', started: new Date().toISOString() });
+  console.log(`\n═══ Newsletter Job ${jobId} Started ═══`);
 
-    let permitResult = { status: 'skipped', total_active: permitDb.prepare('SELECT COUNT(*) as n FROM permits WHERE is_active=1').get().n };
+  // Return immediately
+  res.json({ status: 'accepted', job_id: jobId });
 
-    if (forceRefresh || daysSinceRefresh >= 25) {
-      console.log(`[Newsletter] Step 1: Refreshing permits (last refresh: ${Math.round(daysSinceRefresh)} days ago)...`);
-      const { refreshPermits } = require('./scripts/refresh-permits');
-      permitResult = await refreshPermits();
-      console.log(`[Newsletter] Permits refreshed: ${permitResult.new} new, ${permitResult.updated} updated, ${permitResult.total_active} active`);
-    } else {
-      console.log(`[Newsletter] Step 1: Skipping permit refresh (last refresh: ${Math.round(daysSinceRefresh)} days ago, ${permitResult.total_active} active permits in database)`);
-    }
+  // Run generation in background
+  (async () => {
+    const startTime = Date.now();
+    try {
+      // Step 1: Refresh permits (monthly)
+      const { db: permitDb } = require('./db');
+      const lastRun = permitDb.prepare("SELECT run_date FROM scraper_runs WHERE status IN ('success','partial') ORDER BY run_date DESC LIMIT 1").get();
+      const daysSinceRefresh = lastRun ? (Date.now() - new Date(lastRun.run_date).getTime()) / 86400000 : 999;
 
-    // Step 2: Build the newsletter generation prompt
-    const today = new Date();
-    const cycleEnd = new Date(today);
-    cycleEnd.setDate(cycleEnd.getDate() - cycleEnd.getDay()); // Last Sunday
-    const cycleStart = new Date(cycleEnd);
-    cycleStart.setDate(cycleStart.getDate() - 13); // Two weeks back
+      let permitResult = { status: 'skipped', total_active: permitDb.prepare('SELECT COUNT(*) as n FROM permits WHERE is_active=1').get().n };
 
-    const formatDate = (d) => d.toISOString().split('T')[0];
-    const formatDisplay = (d) => d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+      if (forceRefresh || daysSinceRefresh >= 25) {
+        console.log(`[${jobId}] Refreshing permits (${Math.round(daysSinceRefresh)} days since last)...`);
+        const { refreshPermits } = require('./scripts/refresh-permits');
+        permitResult = await refreshPermits();
+      } else {
+        console.log(`[${jobId}] Skipping permit refresh (${Math.round(daysSinceRefresh)} days ago, ${permitResult.total_active} active)`);
+      }
 
-    const generationPrompt = `You are generating the Insight Miner bi-weekly newsletter for: ${formatDisplay(cycleStart)} – ${formatDisplay(cycleEnd)}.
+      // Step 2: Build prompt
+      const today = new Date();
+      const cycleEnd = new Date(today);
+      cycleEnd.setDate(cycleEnd.getDate() - cycleEnd.getDay());
+      const cycleStart = new Date(cycleEnd);
+      cycleStart.setDate(cycleStart.getDate() - 13);
+
+      const formatDate = (d) => d.toISOString().split('T')[0];
+      const formatDisplay = (d) => d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+
+      const generationPrompt = `You are generating the Insight Miner bi-weekly newsletter for: ${formatDisplay(cycleStart)} – ${formatDisplay(cycleEnd)}.
 
 TASK: Research all 7 sections, then output a COMPLETE JSON object with the content for each section. Do NOT output HTML — output structured JSON that I will merge into the HTML template.
 
@@ -2203,141 +2209,128 @@ EFFICIENCY — YOU HAVE LIMITED ITERATIONS:
 
 Output ONLY the JSON object. No markdown, no commentary, no code fences.`;
 
-    // Step 3: Run the agentic loop (non-streaming)
-    console.log('[Newsletter] Step 2: Running agentic loop...');
+      // Step 3: Agentic loop
+      let pulsePrompt = '';
+      try { pulsePrompt = fs.readFileSync(path.join(PROMPT_DIR, 'workflow-pulse.txt'), 'utf8'); } catch (e) {}
+      const insightMinerPrompt = pulsePrompt
+        ? `${CORE_PROMPT}\n\n${REF_PROMPT}\n\n${pulsePrompt}`
+        : buildSystemPrompt('insight miner newsletter permit construction competitive ai policy');
 
-    // Load insight-miner specific prompt (workflow-pulse.txt is separate from WORKFLOW_FILES)
-    let pulsePrompt = '';
-    try {
-      pulsePrompt = fs.readFileSync(path.join(PROMPT_DIR, 'workflow-pulse.txt'), 'utf8');
-    } catch (e) {
-      console.warn('[Newsletter] workflow-pulse.txt not found, using full system prompt');
-    }
-    const insightMinerPrompt = pulsePrompt
-      ? `${CORE_PROMPT}\n\n${REF_PROMPT}\n\n${pulsePrompt}`
-      : buildSystemPrompt('insight miner newsletter permit construction competitive ai policy');
+      const sessionId = `newsletter-${Date.now()}`;
+      const session = getSession(sessionId);
+      session.messages.push({ role: 'user', content: generationPrompt });
 
-    const sessionId = `newsletter-${Date.now()}`;
-    const session = getSession(sessionId);
-    session.messages.push({ role: 'user', content: generationPrompt });
+      const newsletterTools = tools.filter(t =>
+        ['web_research', 'read_page', 'lookup_permits'].includes(t.name)
+      );
 
-    // Only expose research + permit tools — prevent agent from doing full MRA analysis
-    const newsletterTools = tools.filter(t =>
-      ['web_research', 'read_page', 'lookup_permits'].includes(t.name)
-    );
+      let fullText = '';
+      let iterations = 0;
+      let totalInputTokens = 0;
+      let totalOutputTokens = 0;
 
-    let fullText = '';
-    let iterations = 0;
-    let totalInputTokens = 0;
-    let totalOutputTokens = 0;
-    const MAX_NEWSLETTER_ITERATIONS = 12;
+      while (iterations < 12) {
+        iterations++;
+        console.log(`[${jobId}] Iteration ${iterations}...`);
 
-    while (iterations < MAX_NEWSLETTER_ITERATIONS) {
-      iterations++;
-      console.log(`[Newsletter] Iteration ${iterations}...`);
+        const response = await anthropic.messages.create({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 16384,
+          system: insightMinerPrompt,
+          messages: session.messages,
+          tools: newsletterTools
+        });
 
-      const response = await anthropic.messages.create({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 16384,
-        system: insightMinerPrompt,
-        messages: session.messages,
-        tools: newsletterTools
+        totalInputTokens += response.usage?.input_tokens || 0;
+        totalOutputTokens += response.usage?.output_tokens || 0;
+
+        const assistantContent = response.content;
+        let textParts = [];
+        let toolCalls = [];
+
+        for (const block of assistantContent) {
+          if (block.type === 'text') textParts.push(block.text);
+          else if (block.type === 'tool_use') toolCalls.push(block);
+        }
+
+        session.messages.push({ role: 'assistant', content: assistantContent });
+
+        if (response.stop_reason === 'end_of_turn' || toolCalls.length === 0) {
+          fullText = textParts.join('');
+          break;
+        }
+
+        const toolResults = [];
+        for (const toolCall of toolCalls) {
+          console.log(`  [Tool] ${toolCall.name}(${JSON.stringify(toolCall.input).slice(0, 100)})`);
+          const result = await executeTool(toolCall.name, toolCall.input);
+          toolResults.push({ type: 'tool_result', tool_use_id: toolCall.id, content: JSON.stringify(result) });
+        }
+        session.messages.push({ role: 'user', content: toolResults });
+      }
+
+      // Step 4: Parse JSON
+      let jsonStr = fullText.trim();
+      const jsonMatch = jsonStr.match(/```(?:json)?\n?([\s\S]*?)```/);
+      if (jsonMatch) jsonStr = jsonMatch[1];
+      const jsonStart = jsonStr.indexOf('{');
+      const jsonEnd = jsonStr.lastIndexOf('}');
+      if (jsonStart > -1 && jsonEnd > jsonStart) jsonStr = jsonStr.slice(jsonStart, jsonEnd + 1);
+
+      const data = JSON.parse(jsonStr);
+
+      // Step 5: Build HTML
+      const { buildNewsletterHtml } = require('./scripts/build-newsletter-html');
+      const html = buildNewsletterHtml(data, formatDisplay(cycleStart), formatDisplay(cycleEnd));
+
+      const filename = `insight-miner-${formatDate(today)}.html`;
+      const outputDir = path.join(__dirname, 'data');
+      const outputPath = path.join(outputDir, filename);
+      fs.writeFileSync(outputPath, html, 'utf-8');
+      console.log(`[${jobId}] Saved: ${outputPath}`);
+
+      const duration = Date.now() - startTime;
+      const costCents = ((totalInputTokens * 3 / 1000000) + (totalOutputTokens * 15 / 1000000)) * 100;
+
+      const { insertRun, updateRun } = require('./db');
+      const runId = insertRun.run(sessionId, 'generate-newsletter', 'pulse', 'claude-sonnet-4-6').lastInsertRowid;
+      updateRun.run(iterations, totalInputTokens, totalOutputTokens, costCents, `Generated ${filename}`, runId);
+
+      sessions.delete(sessionId);
+
+      console.log(`\n═══ Job ${jobId} Complete ═══`);
+      console.log(`Iterations: ${iterations} | Cost: ~$${(costCents/100).toFixed(2)} | Time: ${(duration/1000).toFixed(0)}s\n`);
+
+      newsletterJobs.set(jobId, {
+        status: 'success',
+        filename,
+        iterations,
+        tokens: { input: totalInputTokens, output: totalOutputTokens },
+        estimated_cost_cents: Math.round(costCents),
+        duration_ms: duration,
+        permits: permitResult
       });
 
-      totalInputTokens += response.usage?.input_tokens || 0;
-      totalOutputTokens += response.usage?.output_tokens || 0;
-
-      const assistantContent = response.content;
-      let textParts = [];
-      let toolCalls = [];
-
-      for (const block of assistantContent) {
-        if (block.type === 'text') textParts.push(block.text);
-        else if (block.type === 'tool_use') toolCalls.push(block);
-      }
-
-      session.messages.push({ role: 'assistant', content: assistantContent });
-
-      if (response.stop_reason === 'end_of_turn' || toolCalls.length === 0) {
-        fullText = textParts.join('');
-        break;
-      }
-
-      // Execute tool calls
-      const toolResults = [];
-      for (const toolCall of toolCalls) {
-        console.log(`  [Tool] ${toolCall.name}(${JSON.stringify(toolCall.input).slice(0, 100)})`);
-        const result = await executeTool(toolCall.name, toolCall.input);
-        toolResults.push({
-          type: 'tool_result',
-          tool_use_id: toolCall.id,
-          content: JSON.stringify(result)
-        });
-      }
-      session.messages.push({ role: 'user', content: toolResults });
+    } catch (err) {
+      console.error(`[${jobId}] Error:`, err.message);
+      newsletterJobs.set(jobId, { status: 'error', message: err.message });
     }
+  })();
+});
 
-    // Step 4: Parse JSON from agent output
-    let jsonStr = fullText.trim();
-    // Strip code fences if present
-    const jsonMatch = jsonStr.match(/```(?:json)?\n?([\s\S]*?)```/);
-    if (jsonMatch) jsonStr = jsonMatch[1];
-    // Find the JSON object boundaries
-    const jsonStart = jsonStr.indexOf('{');
-    const jsonEnd = jsonStr.lastIndexOf('}');
-    if (jsonStart > -1 && jsonEnd > jsonStart) jsonStr = jsonStr.slice(jsonStart, jsonEnd + 1);
+// Poll for newsletter job status
+app.get('/api/newsletter-status/:jobId', (req, res) => {
+  const job = newsletterJobs.get(req.params.jobId);
+  if (!job) return res.status(404).json({ status: 'not_found' });
+  res.json(job);
+});
 
-    let data;
-    try {
-      data = JSON.parse(jsonStr);
-    } catch (parseErr) {
-      console.error('[Newsletter] JSON parse failed:', parseErr.message);
-      // Save raw output for debugging
-      const debugPath = path.join(__dirname, '..', 'MRA-Newsletter', `debug-raw-${formatDate(today)}.txt`);
-      fs.writeFileSync(debugPath, fullText, 'utf-8');
-      console.error(`[Newsletter] Raw output saved to ${debugPath}`);
-      throw new Error('Newsletter agent returned invalid JSON. Raw output saved for debugging.');
-    }
-
-    // Step 5: Build HTML using the prototype design template
-    const { buildNewsletterHtml } = require('./scripts/build-newsletter-html');
-    const html = buildNewsletterHtml(data, formatDisplay(cycleStart), formatDisplay(cycleEnd));
-
-    const filename = `insight-miner-${formatDate(today)}.html`;
-    const outputPath = path.join(__dirname, '..', 'MRA-Newsletter', filename);
-    fs.writeFileSync(outputPath, html, 'utf-8');
-    console.log(`[Newsletter] Saved: ${outputPath}`);
-
-    const duration = Date.now() - startTime;
-    const costCents = ((totalInputTokens * 3 / 1000000) + (totalOutputTokens * 15 / 1000000)) * 100;
-
-    // Log to ledger
-    const { insertRun, updateRun } = require('./db');
-    const runId = insertRun.run(sessionId, 'generate-newsletter', 'pulse', 'claude-sonnet-4-6').lastInsertRowid;
-    updateRun.run(iterations, totalInputTokens, totalOutputTokens, costCents, `Generated ${filename}`, runId);
-
-    console.log(`\n═══ Newsletter Generation Complete ═══`);
-    console.log(`Iterations: ${iterations} | Tokens: ${totalInputTokens} in / ${totalOutputTokens} out | Cost: ~$${(costCents/100).toFixed(2)} | Time: ${(duration/1000).toFixed(0)}s`);
-    console.log(`File: ${filename}\n`);
-
-    // Clean up session
-    sessions.delete(sessionId);
-
-    res.json({
-      status: 'success',
-      filename,
-      path: outputPath,
-      iterations,
-      tokens: { input: totalInputTokens, output: totalOutputTokens },
-      estimated_cost_cents: Math.round(costCents),
-      duration_ms: duration,
-      permits: permitResult
-    });
-
-  } catch (err) {
-    console.error('[Newsletter] Error:', err);
-    res.status(500).json({ status: 'error', message: err.message });
-  }
+// Serve generated newsletter HTML files
+app.get('/api/newsletter-file/:filename', (req, res) => {
+  const filePath = path.join(__dirname, 'data', req.params.filename);
+  if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File not found' });
+  res.setHeader('Content-Type', 'text/html');
+  res.sendFile(filePath);
 });
 
 // ── API Endpoint ────────────────────────────────────────────────────────────
