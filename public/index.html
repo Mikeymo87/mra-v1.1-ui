@@ -773,20 +773,20 @@
         wrapEl.appendChild(row);
       }
 
-      // Render map if map_data was received (MUST await — renderMap is async)
+      // Render map if map_data was received
       if (pendingMapData && pendingMapData.center) {
-        await renderMap(pendingMapData);
+        renderMap(pendingMapData);
         pendingMapData = null;
       }
       if (pendingChoropleth) {
-        await renderChoropleth(pendingChoropleth);
+        renderChoropleth(pendingChoropleth);
         pendingChoropleth = null;
       }
 
       // If map commands were queued but no map was rendered, create a bare map and replay
       if (window._pendingMapCommands && window._pendingMapCommands.length > 0 && !activeMap) {
         console.log('[MapCmd] Creating bare map to replay', window._pendingMapCommands.length, 'queued commands');
-        await renderMap({
+        renderMap({
           center: { lat: 25.76, lng: -80.19 }, // Downtown Miami default
           origin: null, bhLocations: [], competitors: [], isochrone: null
         });
@@ -1427,15 +1427,11 @@ ${rendered}
     }
   }
 
-  async function renderMap(mapData) {
+  function renderMap(mapData) {
     if (!mapData.center) return;
     try {
-      // Wait for Mapbox token before creating map
-      if (!_mapboxReady) await _mapboxTokenPromise;
-
-      // Clean up ALL previous maps — remove Mapbox instances AND DOM elements
+      // Clean up previous map to free WebGL context
       if (activeMap) { try { activeMap.remove(); } catch(e) {} activeMap = null; }
-      document.querySelectorAll('.map-wrap').forEach(el => el.remove());
 
       const container = document.createElement('div');
       container.className = 'map-wrap';
@@ -2113,15 +2109,11 @@ ${rendered}
     return `Near median (p50=${benchmarks.p50})`;
   }
 
-  async function renderChoropleth(data) {
+  function renderChoropleth(data) {
     if (!data?.zipData || Object.keys(data.zipData).length === 0) return;
     try {
-      // Wait for Mapbox token before creating map
-      if (!_mapboxReady) await _mapboxTokenPromise;
-
-      // Clean up ALL previous maps — remove Mapbox instances AND DOM elements
+      // Clean up previous map
       if (activeMap) { try { activeMap.remove(); } catch(e) {} activeMap = null; }
-      document.querySelectorAll('.map-wrap').forEach(el => el.remove());
 
       const container = document.createElement('div');
       container.className = 'map-wrap';
