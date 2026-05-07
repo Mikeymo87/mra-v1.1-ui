@@ -686,6 +686,7 @@
             }
           } else if (eventType === 'map_data') {
             // Store map data — render after text is done
+            console.log('[Map] Received map_data:', payload.bhLocations?.length, 'BH,', payload.competitors?.length, 'comp, iso:', !!payload.isochrone, 'center:', !!payload.center);
             pendingMapData = payload;
           } else if (eventType === 'map_command') {
             // Agent-triggered map control — queue if map not ready yet
@@ -1182,12 +1183,15 @@ ${rendered}
   let activeMap = null;
   let activeMapLayers = { zips: false, isochrone: [], highlights: [] };
 
-  // Fetch Mapbox token on startup
-  (async () => {
+  // Fetch Mapbox token on startup — store promise so renderMap can await it
+  let _mapboxReady = false;
+  const _mapboxTokenPromise = (async () => {
     try {
       const resp = await fetch('/api/mapbox-token');
       const data = await resp.json();
       mapboxgl.accessToken = data.token;
+      _mapboxReady = true;
+      console.log('[Mapbox] Token loaded');
     } catch (e) { console.warn('[Mapbox] Token fetch failed:', e.message); }
   })();
 
@@ -1412,9 +1416,12 @@ ${rendered}
     }
   }
 
-  function renderMap(mapData) {
+  async function renderMap(mapData) {
     if (!mapData.center) return;
     try {
+      // Wait for Mapbox token before creating map
+      if (!_mapboxReady) await _mapboxTokenPromise;
+
       // Clean up ALL previous maps — remove Mapbox instances AND DOM elements
       if (activeMap) { try { activeMap.remove(); } catch(e) {} activeMap = null; }
       document.querySelectorAll('.map-wrap').forEach(el => el.remove());
@@ -2098,6 +2105,9 @@ ${rendered}
   async function renderChoropleth(data) {
     if (!data?.zipData || Object.keys(data.zipData).length === 0) return;
     try {
+      // Wait for Mapbox token before creating map
+      if (!_mapboxReady) await _mapboxTokenPromise;
+
       // Clean up ALL previous maps — remove Mapbox instances AND DOM elements
       if (activeMap) { try { activeMap.remove(); } catch(e) {} activeMap = null; }
       document.querySelectorAll('.map-wrap').forEach(el => el.remove());
