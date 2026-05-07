@@ -1639,6 +1639,15 @@ function accumulateGeoData(geo, toolName, result, session) {
         }
       }
     }
+    // Capture Google drive times for more accurate pin filtering
+    if (toolName === 'calculate_drive_times' && Array.isArray(data)) {
+      if (!geo.driveTimes) geo.driveTimes = [];
+      for (const dt of data) {
+        if (dt.duration_seconds && dt.destination) {
+          geo.driveTimes.push({ destination: dt.destination, seconds: dt.duration_seconds });
+        }
+      }
+    }
     if (toolName === 'drive_time_isochrone' && data?.features) {
       geo.isochrone = data;
       // Identify ZIPs within isochrone
@@ -1877,11 +1886,36 @@ async function runAgentLoop(sessionId, userMessage, res) {
 
     let bhOutsideRadius = []; // BH locations that were filtered out — agent should mention these
 
+    // Extract the isochrone threshold in seconds (e.g., 900 for 15 min) for drive time cross-check
+    const isoThresholdSec = runGeo.isochrone?.features?.[0]?.properties?.value || 0;
+
     if (runGeo.isochrone && runGeo.isochrone.features?.length > 0) {
       // ISOCHRONE EXISTS: filter pins to only those INSIDE the polygon
-      bhFiltered = runGeo.bhLocations.filter(l => pointInIsochrone(l.lat, l.lng, runGeo.isochrone));
-      bhOutsideRadius = runGeo.bhLocations.filter(l => !pointInIsochrone(l.lat, l.lng, runGeo.isochrone));
-      compFiltered = runGeo.competitors.filter(c => pointInIsochrone(c.lat, c.lng, runGeo.isochrone));
+      // Then cross-check with Google drive times — if Google says a location exceeds
+      // the threshold, remove it even if the ORS polygon includes it (Google is more accurate)
+      const googleExclude = new Set();
+      if (runGeo.driveTimes && isoThresholdSec > 0) {
+        for (const dt of runGeo.driveTimes) {
+          if (dt.seconds > isoThresholdSec) {
+            googleExclude.add(dt.destination.toLowerCase());
+          }
+        }
+      }
+      function notExcludedByGoogle(loc) {
+        if (googleExclude.size === 0) return true;
+        const addr = (loc.address || loc.name || '').toLowerCase();
+        for (const excl of googleExclude) {
+          // Fuzzy match: check if key parts of the address overlap
+          const parts = excl.split(',').map(s => s.trim());
+          if (parts.some(p => p.length > 5 && addr.includes(p))) return false;
+          if (addr.length > 5 && excl.includes(addr.split(',')[0]?.trim())) return false;
+        }
+        return true;
+      }
+      bhFiltered = runGeo.bhLocations.filter(l => pointInIsochrone(l.lat, l.lng, runGeo.isochrone) && notExcludedByGoogle(l));
+      bhOutsideRadius = runGeo.bhLocations.filter(l => !bhFiltered.includes(l));
+      compFiltered = runGeo.competitors.filter(c => pointInIsochrone(c.lat, c.lng, runGeo.isochrone) && notExcludedByGoogle(c));
+      if (googleExclude.size > 0) console.log(`[Map] Google drive-time override: excluded ${googleExclude.size} locations that ORS polygon included`);
       console.log(`[Map] Isochrone filter: ${runGeo.bhLocations.length} BH → ${bhFiltered.length} inside, ${bhOutsideRadius.length} outside | ${runGeo.competitors.length} comp → ${compFiltered.length} inside`);
     } else if (runGeo.origin) {
       // NO ISOCHRONE: use distance radius
