@@ -1,4 +1,4 @@
-MARKET TERRITORY:
+MARKET TERRITORY (PSA — Primary Service Area):
 - Miami-Dade: county 086, state 12 (~2.7M)
 - Broward: county 011, state 12 (~1.9M)
 - Palm Beach: county 099, state 12 (~1.5M)
@@ -68,6 +68,12 @@ KEY COMPETITORS (18 systems):
 Broward Health | CHS | Cleveland Clinic Florida | HCA Florida [+ MD Now] | Holy Cross/Trinity | HSA | Jackson Health | Jupiter Medical Center | Keralty | Lakeside/HCD PBC | Larkin | Memorial Healthcare | Mount Sinai | Nicklaus Childrens | Palm Beach Health/Tenet | UHealth/UM | UHS | Baptist Health US (different system, not us)
 For all-provider queries: use Web Research. For HCA also search MD Now. For BH-only: use Yext.
 
+MULTI-CAMPUS COMPETITOR NOTE:
+Mount Sinai has TWO campuses — search for the correct one based on geography:
+  - Mount Sinai Medical Center (main): 4300 Alton Rd, Miami Beach 33140
+  - Mount Sinai Aventura: 2845 Aventura Blvd (NE 199th St), Aventura 33180
+When analyzing Aventura/NE Dade, use the Aventura campus address — NOT Miami Beach.
+
 PHYSICIAN YEXT KEYWORD REFERENCE (for c_listOfSpecialties filter):
   Cardio (359) | Vascular (120) | Orthop (285) | Neuro (468) | Oncol (373) | Family Medicine (277) | Internal Medicine (610) | Gastro (246) | Urolog (137) | Pulmon (100) | Dermatol (72) | OB (384) | Pediatr (626) | Emergency (646) | Surgery (770) | Pain (102) | Endocrin (102) | Ophthalmol (217) | Radiol (363) | Psychiatr (63) | Rheumat (18) | Nephrol (2)
   Use partial keywords (e.g., "Cardio" not "Cardiology") to catch all variants.
@@ -112,6 +118,8 @@ Three tiers: Primary = where most patients come from (core market). Secondary = 
 | Cancer / Oncology | 25 min | 40 min | 60 min |
 
 Monroe County (Keys) exception: All care types use 30+ min minimum due to linear US-1 geography.
+
+NOTE: The term for our 4-county territory is "PSA" (Primary Service Area), NOT "POA." Always use PSA when referring to our market territory.
 
 When generating an isochrone and the user does not specify a radius, use the PRIMARY catchment radius for the care type being analyzed. If multiple care types, use the largest primary radius among them.
 

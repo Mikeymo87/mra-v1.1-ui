@@ -212,7 +212,7 @@ function updateEvidenceCoverage(coverage, toolName, toolInput) {
   if (toolName === 'geocode_address') coverage.geocodeDone = true;
   if (toolName === 'calculate_drive_times') coverage.driveTimesDone = true;
   if (toolName === 'census_demographics_lookup') coverage.censusDone = true;
-  if (toolName === 'cdc_health_behaviors') coverage.cdcDone = true;
+  if (toolName === 'cdc_health_behaviors' || toolName === 'generate_choropleth_map') coverage.cdcDone = true;
 
   if (toolName === 'baptist_health_location_lookup') {
     const raw = toolInput.filter || '';
@@ -558,8 +558,8 @@ try {
   console.warn('  ZCTA GeoJSON: not found — run "node scripts/build-zcta-geojson.js" to generate');
 }
 
-// ZIPs in CDC data but outside the 4-county POA (Monroe, Miami-Dade, Broward, Palm Beach)
-const POA_EXCLUDED_ZIPS = new Set(['33440', '33455', '33458', '33469', '33471', '33478']);
+// ZIPs in CDC data but outside the 4-county PSA (Monroe, Miami-Dade, Broward, Palm Beach)
+const PSA_EXCLUDED_ZIPS = new Set(['33440', '33455', '33458', '33469', '33471', '33478']);
 
 // ── BH Facility Cache (Yext preload at startup, persisted to disk) ──────
 const BH_CACHE_PATH = path.join(__dirname, 'data', 'bh-facility-cache.json');
@@ -1387,7 +1387,7 @@ async function executeTool(name, input) {
         const metric = input.metric;
         const targetZips = input.zip_codes
           ? input.zip_codes.split(',').map(z => z.trim())
-          : Object.keys(cdcPlacesData).filter(z => !POA_EXCLUDED_ZIPS.has(z));
+          : Object.keys(cdcPlacesData).filter(z => !PSA_EXCLUDED_ZIPS.has(z));
 
         const zipData = {};
         const values = [];

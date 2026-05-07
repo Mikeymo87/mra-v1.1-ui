@@ -80,7 +80,7 @@ Cardio (359) | Vascular (120) | Orthop (285) | Neuro (468) | Oncol (373) | Famil
 - **Prompt:** `prompts/workflow-pulse.txt` (the newsletter writer agent)
 - **Output repo:** [Mikeymo87/MRA-Newsletter](https://github.com/Mikeymo87/MRA-Newsletter) (`~/Desktop/Claude/MRA-Newsletter/`)
 - **What it does:** Produces a weekly HTML briefing for BH MarCom — competitive intel, permit tracking, M&A, policy, AI/marketing tech, and strategic insights. Uses this MRA's `web_research` and `read_page` tools for data gathering.
-- **7 sections:** POA News, Competitive Intel (incl. Steward Watch), AI & Marketing Tech, Permits, M&A Watch, Policy & Macro, Insights to Think About
+- **7 sections:** PSA News, Competitive Intel (incl. Steward Watch), AI & Marketing Tech, Permits, M&A Watch, Policy & Macro, Insights to Think About
 - **Schedule:** Monday morning, covering the prior Mon 12am – Sun 11:59pm
 - **Status:** v1 prototype built (Vol. 1 Issue 01, Apr 27 – May 3 2026). n8n automation next.
 

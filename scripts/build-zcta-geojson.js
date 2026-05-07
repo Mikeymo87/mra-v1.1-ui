@@ -16,7 +16,10 @@ const path = require('path');
 const CDC_DATA_PATH = path.join(__dirname, '..', 'data', 'cdc-places-south-florida.json');
 const OUTPUT_PATH = path.join(__dirname, '..', 'data', 'zcta-south-florida.geojson');
 
-// Census Bureau cartographic boundary GeoJSON — 500k resolution (simplified, good for web)
+// Primary: Census TIGER/Line 2023 full-resolution ZCTA boundaries (most accurate)
+// Download from: https://www2.census.gov/geo/tiger/TIGER2023/ZCTA520/tl_2023_us_zcta520.zip
+// Convert with pyshp: python3 -c "import shapefile; ..." (see inline script below)
+// Fallback: OpenDataDE community GeoJSON (500k simplified, less accurate on coastlines)
 const CENSUS_GEOJSON_URL = 'https://raw.githubusercontent.com/OpenDataDE/State-zip-code-GeoJSON/master/fl_florida_zip_codes_geo.min.json';
 
 // Fallback: Census Bureau's own cartographic boundary file
