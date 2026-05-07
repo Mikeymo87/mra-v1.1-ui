@@ -693,14 +693,9 @@
               }
             }
           } else if (eventType === 'map_data') {
-            // Store map data (pins only) — render after text is done
-            console.log('[Map] Received map_data:', payload.bhLocations?.length, 'BH,', payload.competitors?.length, 'comp, center:', !!payload.center);
+            // Store map data — render after text is done
+            console.log('[Map] Received map_data:', payload.bhLocations?.length, 'BH,', payload.competitors?.length, 'comp, iso:', !!payload.isochrone, 'center:', !!payload.center);
             pendingMapData = payload;
-          } else if (eventType === 'map_isochrone') {
-            // Isochrone sent separately (large GeoJSON)
-            console.log('[Map] Received isochrone:', payload.features?.length, 'features');
-            if (pendingMapData) pendingMapData.isochrone = payload;
-            else pendingMapData = { center: null, origin: null, bhLocations: [], competitors: [], isochrone: payload };
           } else if (eventType === 'map_command') {
             // Agent-triggered map control — queue if map not ready yet
             if (activeMap) { handleMapCommand(payload); }
@@ -778,20 +773,20 @@
         wrapEl.appendChild(row);
       }
 
-      // Render map if map_data was received
+      // Render map if map_data was received (MUST await — renderMap is async)
       if (pendingMapData && pendingMapData.center) {
-        renderMap(pendingMapData);
+        await renderMap(pendingMapData);
         pendingMapData = null;
       }
       if (pendingChoropleth) {
-        renderChoropleth(pendingChoropleth);
+        await renderChoropleth(pendingChoropleth);
         pendingChoropleth = null;
       }
 
       // If map commands were queued but no map was rendered, create a bare map and replay
       if (window._pendingMapCommands && window._pendingMapCommands.length > 0 && !activeMap) {
         console.log('[MapCmd] Creating bare map to replay', window._pendingMapCommands.length, 'queued commands');
-        renderMap({
+        await renderMap({
           center: { lat: 25.76, lng: -80.19 }, // Downtown Miami default
           origin: null, bhLocations: [], competitors: [], isochrone: null
         });
