@@ -1,274 +1,251 @@
 /**
  * build-newsletter-html.js — Renders Insight Miner HTML from structured JSON data
- *
- * Uses the exact CSS and design from the hand-built prototype (insight-miner.html).
- * The agent provides content as JSON; this function provides the design.
+ * ALL INLINE STYLES — Gmail-safe. No <style> block, no CSS classes, no CSS variables.
  */
 
-// CSS is embedded — no external file dependency. Works on Replit and locally.
-const TEMPLATE_CSS = require('./newsletter-css');
+// Colors (inlined everywhere — no CSS variables)
+const C = {
+  green: '#2EA84A', mint: '#7DE69B', black: '#25282A', turquoise: '#59BEC9',
+  coral: '#E5554F', yellow: '#FFCD00', darkBlue: '#0D5F78', deepGreen: '#1D4D52',
+  medGray: '#999898', darkGray: '#56595A', border: '#E2DFDB', offWhite: '#F5F4F2',
+  white: '#ffffff', bg: '#E2DFDB'
+};
 
-// Pineapple SVG (from prototype)
-const PINEAPPLE_SVG = `<svg viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg"><rect fill="#2ea84a" width="160" height="160"/><path fill="#fff" d="M80,51.52c-5.97-12.84-18.98-21.74-34.08-21.74-5.34,0-10.42,1.11-15.01,3.12.89-.07,1.79-.11,2.69-.11,13.24,0,24.69,7.62,30.22,18.72h16.18Z"/><path fill="#fff" d="M126.4,32.79c.91,0,1.81.04,2.69.11-4.6-2.01-9.68-3.12-15.01-3.12-15.09,0-28.11,8.9-34.08,21.74h0s16.18,0,16.18,0c5.52-11.1,16.98-18.72,30.22-18.72Z"/><path fill="#fff" d="M107.04,21.15c-1.15-.34-2.33-.6-3.54-.78-.58-.09-1.17-.16-1.76-.2-.72-.06-1.46-.09-2.2-.09-.99,0-1.97.05-2.93.16-6.55.72-12.38,3.82-16.61,8.42-4.23-4.6-10.06-7.7-16.61-8.42-.96-.11-1.94-.16-2.93-.16-.74,0-1.47.03-2.2.09-.59.05-1.18.12-1.76.2-1.21.18-2.39.44-3.54.78-1.14.33-2.25.75-3.32,1.22.44.04.89.09,1.33.14,13.03,1.65,23.64,9.78,29.03,20.74,5.38-10.96,16-19.09,29.03-20.74.45-.06.89-.1,1.33-.14-1.07-.48-2.18-.89-3.32-1.22Z"/><path fill="#fff" d="M80,22.43c4.16-4.58,9.89-7.67,16.33-8.39.95-.11,1.91-.16,2.88-.16.44,0,.88.01,1.32.03-1.82-.76-3.73-1.29-5.7-1.56-.99-.13-1.99-.2-3.01-.2-.76,0-1.51.04-2.25.11-.61.06-1.21.15-1.81.26-1.24.23-2.45.56-3.64.99-3.05,1.11-5.88,2.86-8.39,5.13,1.55,1.1,2.98,2.37,4.26,3.77Z"/><polygon fill="#fff" points="85.08 112.17 73.02 102.44 82.74 90.38 94.8 100.1 85.08 112.17"/><polygon fill="#fff" points="76.32 133.19 86.04 121.13 98.11 130.85 88.38 142.91 76.32 133.19"/><polygon fill="#fff" points="91.5 69.36 81.78 81.42 69.71 71.7 79.44 59.63 91.5 69.36"/><polygon fill="#fff" points="111.83 113.83 102.1 125.89 90.04 116.17 99.76 104.1 111.83 113.83"/><path fill="#fff" d="M51.03,84.72l-7.13-5.75c1.9-5.14,4.45-9.81,7.51-13.85l9.34,7.53-9.72,12.06Z"/><polygon fill="#fff" points="77.78 86.38 68.05 98.45 55.99 88.72 65.71 76.66 77.78 86.38"/><polygon fill="#fff" points="42.27 105.75 51.99 93.68 64.06 103.41 54.33 115.47 42.27 105.75"/><path fill="#fff" d="M72.32,138.15l11.86,9.56c-1.27.09-2.57.13-3.9.13-5.25,0-9.97-.69-14.16-2l6.2-7.7Z"/><path fill="#fff" d="M41.89,85.54l5.14,4.14-6.9,8.56c.17-4.4.78-8.66,1.77-12.71Z"/><polygon fill="#fff" points="81.08 117.13 71.36 129.19 59.29 119.47 69.02 107.41 81.08 117.13"/><path fill="#fff" d="M107.06,129.89l9.72-12.06,1.55,1.25c-1.46,5.56-3.67,10.45-6.65,14.54l-4.62-3.73Z"/><path fill="#fff" d="M119.92,92.26c.37,2.79.56,5.65.56,8.57,0,.77,0,1.54-.03,2.29l-4.62,5.74-12.06-9.72,9.72-12.06,6.43,5.19Z"/><path fill="#fff" d="M103.07,134.85l4.4,3.55c-3.65,3.4-8.09,5.96-13.34,7.55l8.94-11.1Z"/><path fill="#fff" d="M48.41,132.97l6.89-8.54,12.06,9.72-7.37,9.15c-4.71-2.51-8.56-5.99-11.58-10.33Z"/><path fill="#fff" d="M112.52,78.12l-12.06-9.72,5.59-6.94c3.57,3.81,6.61,8.4,8.97,13.56l-2.5,3.1Z"/><path fill="#fff" d="M50.33,120.43l-5.31,6.59c-1.93-4.2-3.29-8.94-4.08-14.16l9.39,7.57Z"/><polygon fill="#fff" points="98.8 95.14 86.74 85.42 96.46 73.36 108.53 83.08 98.8 95.14"/><path fill="#fff" d="M55.61,60.33c1.28-1.27,2.62-2.45,4.02-3.52h13.91l-8.78,10.89-9.15-7.37Z"/><path fill="#fff" d="M101.35,57.14l-5.85,7.26-9.42-7.59h14.85c.14.11.28.22.42.33Z"/></svg>`;
+const PINEAPPLE_SVG = `<svg viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg" width="28" height="28"><rect fill="#2ea84a" width="160" height="160"/><path fill="#fff" d="M80,51.52c-5.97-12.84-18.98-21.74-34.08-21.74-5.34,0-10.42,1.11-15.01,3.12.89-.07,1.79-.11,2.69-.11,13.24,0,24.69,7.62,30.22,18.72h16.18Z"/><path fill="#fff" d="M126.4,32.79c.91,0,1.81.04,2.69.11-4.6-2.01-9.68-3.12-15.01-3.12-15.09,0-28.11,8.9-34.08,21.74h0s16.18,0,16.18,0c5.52-11.1,16.98-18.72,30.22-18.72Z"/><path fill="#fff" d="M107.04,21.15c-1.15-.34-2.33-.6-3.54-.78-.58-.09-1.17-.16-1.76-.2-.72-.06-1.46-.09-2.2-.09-.99,0-1.97.05-2.93.16-6.55.72-12.38,3.82-16.61,8.42-4.23-4.6-10.06-7.7-16.61-8.42-.96-.11-1.94-.16-2.93-.16-.74,0-1.47.03-2.2.09-.59.05-1.18.12-1.76.2-1.21.18-2.39.44-3.54.78-1.14.33-2.25.75-3.32,1.22.44.04.89.09,1.33.14,13.03,1.65,23.64,9.78,29.03,20.74,5.38-10.96,16-19.09,29.03-20.74.45-.06.89-.1,1.33-.14-1.07-.48-2.18-.89-3.32-1.22Z"/></svg>`;
 
-// ── Helper: render a story card ─────────────────────────────────────────────
-function renderStory(s, isDark = false) {
-  const typeClass = s.type === 'threat' ? ' threat' : s.type === 'watch' ? ' watch' : s.type === 'opp' ? ' opp' : '';
-  const tagClass = s.tag_color === 'red' ? 't-red' : s.tag_color === 'yellow' ? 't-yellow' : s.tag_color === 'blue' ? 't-blue' : 't-gray';
+function renderStory(s) {
+  const borderColor = s.type === 'threat' ? C.coral : s.type === 'watch' ? C.yellow : s.type === 'opp' ? C.turquoise : C.green;
+  const tagBg = s.tag_color === 'red' ? '#FDECEB' : s.tag_color === 'yellow' ? '#FFF8E1' : s.tag_color === 'blue' ? '#E8F6F8' : '#F0EFED';
+  const tagFg = s.tag_color === 'red' ? C.coral : s.tag_color === 'yellow' ? '#B8860B' : s.tag_color === 'blue' ? C.darkBlue : C.darkGray;
 
   let dots = '';
   if (s.impact_dots) {
-    const filled = Array(s.impact_dots).fill('<span class="d on"></span>').join('');
-    const empty = Array(Math.max(0, 5 - s.impact_dots)).fill('<span class="d"></span>').join('');
-    dots = `<div class="dots-row"><span class="dots-label">BH Impact</span><div class="dots">${filled}${empty}</div></div>`;
+    const filled = Array(s.impact_dots).fill(`<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${C.coral};margin-right:3px;"></span>`).join('');
+    const empty = Array(Math.max(0, 5 - s.impact_dots)).fill(`<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${C.border};margin-right:3px;"></span>`).join('');
+    dots = `<div style="margin-top:12px;"><span style="font-family:'Poppins',sans-serif;font-size:8px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:${C.medGray};margin-right:8px;">BH Impact</span>${filled}${empty}</div>`;
   }
 
-  return `
-    <div class="story${typeClass}">
-      <span class="tag ${tagClass}">${s.tag_text || ''}</span>
-      <h4>${s.headline || ''}</h4>
-      ${s.body_html || ''}
-      ${s.marketing_impact_html ? `<div class="mi"><div class="mi-label">Marketing Impact</div>${s.marketing_impact_html}</div>` : ''}
-      ${dots}
-      ${s.sources_html ? `<p class="src">Sources: ${s.sources_html}</p>` : ''}
-    </div>`;
+  return `<table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:18px 0;"><tr><td style="padding:24px;background:${C.white};border:1px solid ${C.border};border-radius:6px;border-left:4px solid ${borderColor};">
+    <span style="font-family:'Poppins',sans-serif;font-size:8px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;display:inline-block;padding:2px 8px;border-radius:3px;margin-bottom:8px;background:${tagBg};color:${tagFg};">${s.tag_text || ''}</span>
+    <div style="font-family:'Poppins',sans-serif;font-size:15px;font-weight:700;color:${C.black};margin-bottom:8px;line-height:1.3;">${s.headline || ''}</div>
+    <div style="font-size:14px;color:${C.darkGray};line-height:1.65;">${s.body_html || ''}</div>
+    ${s.marketing_impact_html ? `<div style="margin-top:14px;padding:14px 16px;background:#f4f9f5;border-radius:5px;border:1px solid #d5edda;">
+      <div style="font-family:'Poppins',sans-serif;font-size:8px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:${C.green};margin-bottom:6px;">Marketing Impact</div>
+      <div style="font-size:12.5px;line-height:1.55;color:${C.darkGray};">${s.marketing_impact_html}</div>
+    </div>` : ''}
+    ${dots}
+    ${s.sources_html ? `<div style="font-size:10px;color:${C.medGray};margin-top:10px;padding-top:8px;border-top:1px solid ${C.border};">Sources: ${s.sources_html}</div>` : ''}
+  </td></tr></table>`;
 }
 
-// ── Helper: render impact dots ──────────────────────────────────────────────
-function renderDots(n) {
-  const filled = Array(n).fill('<span class="d on"></span>').join('');
-  const empty = Array(Math.max(0, 5 - n)).fill('<span class="d"></span>').join('');
-  return `<div class="dots-row"><span class="dots-label">BH Impact</span><div class="dots">${filled}${empty}</div></div>`;
+function sectionHeader(num, tag, title, dark) {
+  const numBg = dark ? C.green : C.black;
+  const tagColor = dark ? 'rgba(255,255,255,0.4)' : C.medGray;
+  const titleColor = dark ? C.white : C.black;
+  return `<table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+    <td width="24" style="vertical-align:middle;"><div style="font-family:'Poppins',sans-serif;font-size:10px;font-weight:700;color:${C.white};background:${numBg};width:24px;height:24px;line-height:24px;text-align:center;border-radius:5px;">${num}</div></td>
+    <td style="vertical-align:middle;padding-left:10px;"><span style="font-family:'Poppins',sans-serif;font-size:10px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:${tagColor};">${tag}</span></td>
+  </tr></table>
+  <div style="font-family:'Poppins',sans-serif;font-size:23px;font-weight:800;color:${titleColor};line-height:1.2;margin-top:6px;margin-bottom:14px;">${title}</div>`;
 }
 
-// ── Main builder ────────────────────────────────────────────────────────────
-function buildNewsletterHtml(data, dateStart, dateEnd) {
-  const css = TEMPLATE_CSS;
+function buildNewsletterHtml(data) {
   const d = data;
   const s = d.sections || {};
 
-  // Exec summary bullets
   const execBullets = (d.exec_summary || []).map(b =>
-    `<li><span class="exec-bullet">&rsaquo;</span> <span>${b}</span></li>`
-  ).join('\n        ');
+    `<tr><td width="20" style="vertical-align:top;color:${C.green};font-weight:700;font-size:15px;line-height:1.5;">&rsaquo;</td><td style="font-size:13px;color:rgba(255,255,255,0.7);line-height:1.55;padding:7px 0;border-bottom:1px solid rgba(255,255,255,0.06);">${b}</td></tr>`
+  ).join('');
 
-  // Stats strip
-  const statsHtml = (d.stats || []).map(s =>
-    `<div class="stat"><div class="num">${s.num}</div><div class="lbl">${s.label}</div></div>`
-  ).join('\n    ');
+  const stats = (d.stats || []).map((s, i) =>
+    `<td width="25%" style="padding:20px;text-align:center;${i < 3 ? 'border-right:1px solid rgba(255,255,255,0.06);' : ''}">
+      <div style="font-family:'Poppins',sans-serif;font-size:24px;font-weight:800;color:${C.white};">${s.num}</div>
+      <div style="font-size:9px;font-weight:500;color:rgba(255,255,255,0.4);margin-top:3px;line-height:1.3;">${s.label}</div>
+    </td>`
+  ).join('');
 
-  // Section 1: PSA News
-  const s1Stories = (s.s1_psa_news?.stories || []).map(st => renderStory(st)).join('\n');
+  // S1
+  const s1 = (s.s1_psa_news?.stories || []).map(st => renderStory(st)).join('');
 
-  // Section 2: Competitive Intel
+  // S2
   const s2 = s.s2_competitive || {};
-  const capexBars = (s2.capex_chart || []).map(c =>
-    `<div class="bar-row"><div class="bar-label">${c.label}</div><div class="bar-track"><div class="bar-fill" style="width:${c.width_pct}%;background:${c.color || 'var(--coral)'};"></div></div><div class="bar-val">${c.value}</div></div>`
-  ).join('\n      ');
-  const s2Stories = (s2.stories || []).map(st => renderStory(st)).join('\n');
-  const fsedCards = (s2.fsed_cards || []).map(c =>
-    `<div class="mc ${c.color || ''}"><div class="num" style="font-size:17px;">${c.system}</div><div class="desc">${c.description}</div></div>`
-  ).join('\n      ');
+  const capex = (s2.capex_chart || []).map(c =>
+    `<tr><td width="110" style="font-size:11px;font-weight:600;color:${C.black};text-align:right;padding:4px 0;">${c.label}</td>
+     <td style="padding:4px 10px;"><div style="background:#E8E6E3;border-radius:3px;height:20px;"><div style="background:${c.color || C.coral};height:20px;width:${c.width_pct}%;border-radius:3px;"></div></div></td>
+     <td width="55" style="font-family:'Poppins',sans-serif;font-size:12px;font-weight:700;color:${C.black};">${c.value}</td></tr>`
+  ).join('');
+  const s2Stories = (s2.stories || []).map(st => renderStory(st)).join('');
   const stewardRows = (s2.steward_hospitals || []).map(h =>
-    `<tr><td><strong>${h.name}</strong></td><td>${h.location}</td><td>${h.county}</td></tr>`
-  ).join('\n        ');
-  const s2StewardMI = s2.steward_marketing_impact_html || '';
+    `<tr><td style="padding:10px 12px;border-bottom:1px solid ${C.border};color:${C.darkGray};font-weight:700;">${h.name}</td>
+     <td style="padding:10px 12px;border-bottom:1px solid ${C.border};color:${C.darkGray};">${h.location}</td>
+     <td style="padding:10px 12px;border-bottom:1px solid ${C.border};color:${C.darkGray};">${h.county}</td></tr>`
+  ).join('');
 
-  // Section 3: AI & Marketing Tech
+  // S3
   const s3 = s.s3_ai_tech || {};
-  const s3Stories = (s3.stories || []).map(st => renderStory(st)).join('\n');
-  const s3BottomLine = s3.bottom_line_html || '';
+  const s3Stories = (s3.stories || []).map(st => renderStory(st)).join('');
 
-  // Section 4: Permits
+  // S4 permits
   const s4 = s.s4_permits || {};
-  const permitRows = (s4.permits_table || []).map(p => {
-    let deltaBadge = '';
-    if (p.delta === 'NEW') deltaBadge = '<span class="bdg bdg-g">NEW</span>';
-    else if (p.delta === 'UPDATED') deltaBadge = '<span class="bdg bdg-b">UPDATED</span>';
-    const projectLink = p.source_url ? `<a href="${p.source_url}" style="color:inherit;text-decoration:none;border-bottom:1px dotted var(--medium-gray);">${p.project}</a>` : p.project;
-    return `<tr><td><strong>${projectLink}</strong></td><td>${p.system || ''}</td><td>${p.county || ''}</td><td>${p.value || 'TBD'}</td><td>${p.status || ''} ${deltaBadge}</td></tr>`;
-  }).join('\n        ');
+  const permitRows = (s4.permits_table || []).map((p, i) => {
+    let badge = '';
+    if (p.delta === 'NEW') badge = `<span style="display:inline-block;font-family:'Poppins',sans-serif;font-size:8px;font-weight:700;padding:2px 7px;border-radius:3px;background:#E8F5E9;color:#2E7D32;margin-left:4px;">NEW</span>`;
+    else if (p.delta === 'UPDATED') badge = `<span style="display:inline-block;font-family:'Poppins',sans-serif;font-size:8px;font-weight:700;padding:2px 7px;border-radius:3px;background:#E3F2FD;color:#1565C0;margin-left:4px;">UPDATED</span>`;
+    const bg = i % 2 === 1 ? `background:${C.offWhite};` : '';
+    return `<tr><td style="padding:10px 12px;border-bottom:1px solid ${C.border};color:${C.darkGray};font-weight:700;${bg}">${p.project}</td>
+     <td style="padding:10px 12px;border-bottom:1px solid ${C.border};color:${C.darkGray};${bg}">${p.system || ''}</td>
+     <td style="padding:10px 12px;border-bottom:1px solid ${C.border};color:${C.darkGray};${bg}">${p.county || ''}</td>
+     <td style="padding:10px 12px;border-bottom:1px solid ${C.border};color:${C.darkGray};${bg}">${p.value || 'TBD'}</td>
+     <td style="padding:10px 12px;border-bottom:1px solid ${C.border};color:${C.darkGray};${bg}">${p.status || ''} ${badge}</td></tr>`;
+  }).join('');
 
-  // Section 5: M&A (dark section)
+  // S5 M&A
   const s5 = s.s5_ma || {};
-  const s5Stories = (s5.stories || []).map(st => renderStory(st, true)).join('\n');
-  const s5Callout = s5.callout_html || '';
-  const s5DealChart = s5.deal_chart || [];
-  const dealBars = s5DealChart.map(b =>
-    `<div style="flex:1;text-align:center;"><div style="background:${b.highlight ? 'var(--green)' : 'rgba(255,255,255,0.06)'};height:${b.height || 60}px;border-radius:3px 3px 0 0;display:flex;align-items:flex-end;justify-content:center;padding-bottom:5px;"><span style="font-family:'Poppins';font-size:${b.highlight ? '14' : '11'}px;color:${b.highlight ? '#fff' : 'rgba(255,255,255,0.35)'};font-weight:${b.highlight ? 800 : 700};">${b.value}</span></div><div style="font-size:9px;color:${b.highlight ? 'var(--mint)' : 'rgba(255,255,255,0.3)'};margin-top:5px;${b.highlight ? 'font-weight:600;' : ''}">${b.label}</div></div>`
-  ).join('\n        ');
+  const s5Stories = (s5.stories || []).map(st => renderStory(st)).join('');
 
-  // Section 6: Policy
+  // S6 Policy
   const s6 = s.s6_policy || {};
-  const metricCards = (s6.metric_cards || []).map(c =>
-    `<div class="mc ${c.color || ''}""><div class="num">${c.num}</div><div class="desc">${c.description}</div></div>`
-  ).join('\n      ');
-  const s6Stories = (s6.stories || []).map(st => renderStory(st)).join('\n');
+  const metricCards = (s6.metric_cards || []).map(c => {
+    const topColor = c.color === 'red' ? C.coral : c.color === 'yellow' ? C.yellow : C.green;
+    return `<td width="48%" style="background:${C.white};border:1px solid ${C.border};border-radius:6px;border-top:3px solid ${topColor};padding:20px;vertical-align:top;">
+      <div style="font-family:'Poppins',sans-serif;font-size:24px;font-weight:800;color:${C.black};line-height:1.1;">${c.num}</div>
+      <div style="font-size:11.5px;color:${C.darkGray};margin-top:4px;line-height:1.4;">${c.description}</div>
+    </td>`;
+  });
+  let metricHtml = '';
+  for (let i = 0; i < metricCards.length; i += 2) {
+    metricHtml += `<table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:10px 0;"><tr>${metricCards[i]}${metricCards[i+1] ? '<td width="4%"></td>' + metricCards[i+1] : ''}</tr></table>`;
+  }
+  const s6Stories = (s6.stories || []).map(st => renderStory(st)).join('');
 
-  // Section 7: Insights
-  const s7 = s.s7_insights || {};
-  const insights = (s7.insights || []).map((ins, i) =>
-    `<div class="insight"><div class="i-num">${i + 1}</div><div><h4>${ins.headline}</h4><p>${ins.body}</p></div></div>`
-  ).join('\n\n    ');
+  // S7 Insights
+  const insights = (s.s7_insights?.insights || []).map((ins, i) =>
+    `<table width="100%" cellpadding="0" cellspacing="0" border="0" style="padding:18px 0;border-bottom:1px solid ${C.border};"><tr>
+      <td width="34" style="vertical-align:top;"><div style="font-family:'Poppins',sans-serif;font-size:13px;font-weight:800;color:${C.white};background:${C.black};width:34px;height:34px;line-height:34px;text-align:center;border-radius:6px;">${i + 1}</div></td>
+      <td style="vertical-align:top;padding-left:16px;">
+        <div style="font-family:'Poppins',sans-serif;font-size:13.5px;font-weight:700;color:${C.black};margin-bottom:4px;line-height:1.3;">${ins.headline}</div>
+        <div style="font-size:12.5px;color:${C.darkGray};line-height:1.55;">${ins.body}</div>
+      </td>
+    </tr></table>`
+  ).join('');
 
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Insight Miner &mdash; ${d.issue_date_range || ''}</title>
+  // Callout helper
+  const callout = (title, html, dark) => {
+    if (!html) return '';
+    const bg = dark ? 'rgba(255,255,255,0.06)' : C.black;
+    const border = dark ? '1px solid rgba(255,255,255,0.08)' : 'none';
+    return `<table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:22px 0;"><tr><td style="padding:20px 22px;background:${bg};border-radius:6px;${border ? 'border:' + border + ';' : ''}">
+      <div style="font-family:'Poppins',sans-serif;font-size:12px;font-weight:700;color:${C.mint};margin-bottom:6px;">${title}</div>
+      <div style="font-size:13px;color:rgba(255,255,255,0.7);line-height:1.55;">${html}</div>
+    </td></tr></table>`;
+  };
+
+  const thStyle = `font-family:'Poppins',sans-serif;font-size:8.5px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:${C.white};background:${C.black};text-align:left;padding:10px 12px;`;
+
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<style>${css}</style>
-</head>
-<body>
+</head><body style="margin:0;padding:0;font-family:'Inter',Helvetica,Arial,sans-serif;background:${C.bg};color:${C.black};line-height:1.65;">
+<table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:${C.bg};"><tr><td align="center" style="padding:32px 0;">
+<table width="780" cellpadding="0" cellspacing="0" border="0" style="background:${C.white};box-shadow:0 4px 40px rgba(0,0,0,0.12);">
 
-<div class="container">
+<!-- MASTHEAD -->
+<tr><td style="background:${C.black};padding:14px 40px;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+    <td>${PINEAPPLE_SVG} <span style="font-family:'Poppins',sans-serif;font-weight:800;font-size:14px;letter-spacing:0.2em;color:${C.white};vertical-align:middle;margin-left:12px;">INSIGHT MINER</span></td>
+    <td style="text-align:right;"><div style="font-family:'Poppins',sans-serif;font-weight:700;font-size:8.5px;letter-spacing:0.12em;color:${C.green};">${d.vol_issue || 'VOL. 1'}</div><div style="font-size:9px;color:${C.medGray};">Baptist Health South Florida</div></td>
+  </tr></table>
+</td></tr>
 
-  <!-- MASTHEAD -->
-  <div class="masthead">
-    <div class="mast-left">
-      <div class="pineapple">${PINEAPPLE_SVG}</div>
-      <div class="mast-name">INSIGHT MINER</div>
-    </div>
-    <div class="mast-right">
-      <div class="vol">${d.vol_issue || 'VOL. 1 &mdash; ISSUE 02'}</div>
-      Baptist Health South Florida
-    </div>
-  </div>
-  <div class="brand-rule"></div>
+<!-- GREEN RULE -->
+<tr><td style="height:3px;background:${C.green};font-size:0;line-height:0;">&nbsp;</td></tr>
 
-  <!-- HERO -->
-  <div class="hero">
-    <div class="hero-eyebrow">Bi-Weekly Market Intelligence &mdash; ${d.issue_date_range || ''}</div>
-    <h1>${d.hero_headline || ''}</h1>
-  </div>
+<!-- HERO -->
+<tr><td style="background:${C.white};padding:40px 40px 20px;">
+  <div style="font-family:'Poppins',sans-serif;font-size:10px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:${C.green};margin-bottom:14px;">Bi-Weekly Market Intelligence &mdash; ${d.issue_date_range || ''}</div>
+  <div style="font-family:'Poppins',sans-serif;font-size:28px;font-weight:800;color:${C.black};line-height:1.15;">${d.hero_headline || ''}</div>
+</td></tr>
 
-  <!-- EXEC SUMMARY -->
-  <div class="exec-wrap">
-    <div class="exec-box">
-      <div class="exec-label">Executive Summary</div>
-      <ul class="exec-list">
-        ${execBullets}
-      </ul>
-    </div>
-  </div>
+<!-- EXEC SUMMARY -->
+<tr><td style="padding:0 40px 36px;background:${C.white};">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:${C.black};border-radius:8px;"><tr><td style="padding:26px 28px;">
+    <div style="font-family:'Poppins',sans-serif;font-size:9px;font-weight:700;letter-spacing:0.16em;text-transform:uppercase;color:${C.mint};margin-bottom:14px;">Executive Summary</div>
+    <table width="100%" cellpadding="0" cellspacing="0" border="0">${execBullets}</table>
+  </td></tr></table>
+</td></tr>
 
-  <!-- STATS -->
-  <div class="stats">
-    ${statsHtml}
-  </div>
+<!-- STATS -->
+<tr><td style="background:${C.black};"><table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>${stats}</tr></table></td></tr>
 
-  <!-- TOC -->
-  <div class="toc">
-    <span class="toc-label">In This Issue</span>
-    <a href="#s1">Primary Service Area News</a>
-    <a href="#s2">Competitive Intel</a>
-    <a href="#s3">AI &amp; Marketing Tech</a>
-    <a href="#s4">Permits</a>
-    <a href="#s5">Mergers &amp; Acquisitions</a>
-    <a href="#s6">Policy</a>
-    <a href="#s7">Insights</a>
-  </div>
+<!-- S1 PSA NEWS -->
+<tr><td style="padding:44px 40px 40px;background:${C.white};border-bottom:1px solid ${C.border};">
+  ${sectionHeader(1, 'Primary Service Area News', s.s1_psa_news?.subtitle || 'Market-Moving Stories From Our Four Counties')}
+  ${s1}
+</td></tr>
 
-  <!-- S1: PSA NEWS -->
-  <div class="section" id="s1">
-    <div class="sec-head"><div class="sec-num">1</div><span class="sec-tag">Primary Service Area News</span></div>
-    <h2>${s.s1_psa_news?.subtitle || 'Market-Moving Stories From Our Four Counties'}</h2>
-    ${s1Stories}
-  </div>
+<!-- S2 COMPETITIVE -->
+<tr><td style="padding:44px 40px 40px;background:${C.offWhite};border-bottom:1px solid ${C.border};">
+  ${sectionHeader(2, 'Competitive Intelligence', s2.subtitle || "Who's Building, Buying, and Positioning Against Us")}
+  ${capex ? `<table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:${C.offWhite};border:1px solid ${C.border};border-radius:6px;padding:22px;margin:18px 0;">
+    <tr><td style="padding:22px;"><div style="font-family:'Poppins',sans-serif;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:${C.darkGray};margin-bottom:16px;">Competitor Capital Investment &mdash; Active Projects</div>
+    <table width="100%" cellpadding="0" cellspacing="0" border="0">${capex}</table></td></tr></table>` : ''}
+  ${s2Stories}
+  ${stewardRows ? `<div style="font-family:'Poppins',sans-serif;font-size:16px;font-weight:700;color:${C.black};margin:32px 0 10px;">Steward Watch</div>
+    <table width="100%" cellpadding="0" cellspacing="0" border="0">
+    <tr><td style="${thStyle}">Hospital</td><td style="${thStyle}">Location</td><td style="${thStyle}">County</td></tr>${stewardRows}</table>
+    ${s2.steward_marketing_impact_html ? `<div style="margin-top:14px;padding:14px 16px;background:#f4f9f5;border-radius:5px;border:1px solid #d5edda;"><div style="font-family:'Poppins',sans-serif;font-size:8px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:${C.green};margin-bottom:6px;">Marketing Impact</div><div style="font-size:12.5px;line-height:1.55;color:${C.darkGray};">${s2.steward_marketing_impact_html}</div></div>` : ''}` : ''}
+</td></tr>
 
-  <!-- S2: COMPETITIVE INTELLIGENCE -->
-  <div class="section alt" id="s2">
-    <div class="sec-head"><div class="sec-num">2</div><span class="sec-tag">Competitive Intelligence</span></div>
-    <h2>${s2.subtitle || "Who's Building, Buying, and Positioning Against Us"}</h2>
+<!-- GREEN DIVIDER -->
+<tr><td style="height:3px;background:${C.green};font-size:0;line-height:0;">&nbsp;</td></tr>
 
-    ${capexBars ? `<div class="chart">
-      <div class="chart-title">Competitor Capital Investment in the Primary Service Area &mdash; Active Projects</div>
-      ${capexBars}
-    </div>` : ''}
+<!-- S3 AI -->
+<tr><td style="padding:44px 40px 40px;background:${C.white};border-bottom:1px solid ${C.border};">
+  ${sectionHeader(3, 'AI &amp; Marketing Technology', s3.subtitle || "What's Moving in AI")}
+  ${s3Stories}
+  ${s3.bottom_line_html ? callout('The Bottom Line on AI', s3.bottom_line_html) : ''}
+</td></tr>
 
-    ${s2Stories}
+<!-- S4 PERMITS -->
+<tr><td style="padding:44px 40px 40px;background:${C.offWhite};border-bottom:1px solid ${C.border};">
+  ${sectionHeader(4, 'Permit &amp; Construction Tracker', s4.subtitle || "What's Being Built in Our Four Counties")}
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:16px 0;">
+    <tr><td style="${thStyle}">Project</td><td style="${thStyle}">System</td><td style="${thStyle}">County</td><td style="${thStyle}">Value</td><td style="${thStyle}">Status</td></tr>
+    ${permitRows}
+  </table>
+</td></tr>
 
-    ${fsedCards ? `<div class="metrics">${fsedCards}</div>` : ''}
+<!-- S5 M&A (DARK) -->
+<tr><td style="padding:44px 40px 40px;background:${C.black};">
+  ${sectionHeader(5, 'Mergers &amp; Acquisitions Watch', s5.subtitle || 'Deals, Acquisitions, and the Private Equity Playbook', true)}
+  <div style="font-size:14px;color:rgba(255,255,255,0.65);margin-bottom:16px;">${s5.deal_count_headline || ''}</div>
+  ${s5Stories}
+  ${s5.callout_html ? callout('The Private Equity Signal for Marketing', s5.callout_html, true) : ''}
+</td></tr>
 
-    ${stewardRows ? `
-    <h3>Steward Watch</h3>
-    <table>
-      <thead><tr><th>Hospital</th><th>Location</th><th>County</th></tr></thead>
-      <tbody>${stewardRows}</tbody>
-    </table>
-    ${s2StewardMI ? `<div class="mi"><div class="mi-label">Marketing Impact</div>${s2StewardMI}</div>` : ''}
-    ` : ''}
-  </div>
+<!-- S6 POLICY -->
+<tr><td style="padding:44px 40px 40px;background:${C.white};border-bottom:1px solid ${C.border};">
+  ${sectionHeader(6, 'Policy &amp; Macro', s6.subtitle || 'Policy Shifts Reshaping Our Patient Base')}
+  ${metricHtml}
+  ${s6Stories}
+</td></tr>
 
-  <div class="sep"></div>
+<!-- GREEN DIVIDER -->
+<tr><td style="height:3px;background:${C.green};font-size:0;line-height:0;">&nbsp;</td></tr>
 
-  <!-- S3: AI & MARKETING TECH -->
-  <div class="section" id="s3">
-    <div class="sec-head"><div class="sec-num">3</div><span class="sec-tag">AI &amp; Marketing Technology</span></div>
-    <h2>${s3.subtitle || "What's Moving in AI &mdash; and What We Should Do About It"}</h2>
-    ${s3Stories}
-    ${s3BottomLine ? `<div class="callout"><div class="cl">The Bottom Line on AI</div>${s3BottomLine}</div>` : ''}
-  </div>
+<!-- S7 INSIGHTS -->
+<tr><td style="padding:44px 40px 40px;background:${C.offWhite};">
+  ${sectionHeader(7, 'Insights to Think About', 'Questions for the Marketing Leadership Team')}
+  ${insights}
+</td></tr>
 
-  <!-- S4: PERMITS -->
-  <div class="section alt" id="s4">
-    <div class="sec-head"><div class="sec-num">4</div><span class="sec-tag">Permit &amp; Construction Tracker</span></div>
-    <h2>${s4.subtitle || "What's Being Built in Our Four Counties"}</h2>
-    <p class="sec-intro">Active healthcare construction, Florida Agency for Health Care Administration filings, and facility approvals across the Primary Service Area.</p>
-    <table>
-      <thead><tr><th>Project</th><th>System</th><th>County</th><th>Value</th><th>Status</th></tr></thead>
-      <tbody>
-        ${permitRows}
-      </tbody>
-    </table>
-  </div>
+<!-- FOOTER -->
+<tr><td style="background:${C.black};padding:32px 40px;text-align:center;">
+  <div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:12px;letter-spacing:0.2em;color:${C.white};margin-bottom:2px;">INSIGHT MINER</div>
+  <div style="font-size:9px;color:${C.medGray};margin-bottom:16px;">Powered by the MarCom Market Research Agent &middot; Baptist Health South Florida</div>
+  <div style="display:inline-block;font-family:'Poppins',sans-serif;font-size:7.5px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:${C.mint};border:1px solid rgba(125,230,155,0.2);border-radius:3px;padding:4px 12px;">Generated by AI &mdash; Verified by Humans</div>
+</td></tr>
 
-  <!-- S5: M&A (dark) -->
-  <div class="section-dark" id="s5">
-    <div class="sec-head"><div class="sec-num">5</div><span class="sec-tag">Mergers &amp; Acquisitions Watch</span></div>
-    <h2>${s5.subtitle || 'Deals, Acquisitions, and the Private Equity Playbook'}</h2>
-    <p>${s5.deal_count_headline || ''}</p>
-
-    ${dealBars ? `<div class="chart">
-      <div class="chart-title" style="color:rgba(255,255,255,0.45);">Hospital Mergers &amp; Acquisitions &mdash; Year Over Year</div>
-      <div style="display:flex;align-items:flex-end;gap:20px;height:130px;">
-        ${dealBars}
-      </div>
-    </div>` : ''}
-
-    ${s5Stories}
-
-    ${s5Callout ? `<div class="callout"><div class="cl">The Private Equity Signal for Marketing</div>${s5Callout}</div>` : ''}
-  </div>
-
-  <!-- S6: POLICY -->
-  <div class="section" id="s6">
-    <div class="sec-head"><div class="sec-num">6</div><span class="sec-tag">Policy &amp; Macro</span></div>
-    <h2>${s6.subtitle || 'Policy Shifts Reshaping Our Patient Base'}</h2>
-    ${metricCards ? `<div class="metrics">${metricCards}</div>` : ''}
-    ${s6Stories}
-  </div>
-
-  <div class="sep"></div>
-
-  <!-- S7: INSIGHTS -->
-  <div class="section alt" id="s7">
-    <div class="sec-head"><div class="sec-num">7</div><span class="sec-tag">Insights to Think About</span></div>
-    <h2>Questions for the Marketing Leadership Team</h2>
-    ${insights}
-  </div>
-
-  <!-- FOOTER -->
-  <div class="footer">
-    <div class="f-logo">INSIGHT MINER</div>
-    <div class="f-sub">Powered by the MarCom Market Research Agent &middot; Baptist Health South Florida</div>
-    <div class="f-badge">Generated by AI &mdash; Verified by Humans</div>
-  </div>
-
-</div>
-</body>
-</html>`;
+</table></td></tr></table></body></html>`;
 }
 
 module.exports = { buildNewsletterHtml };
