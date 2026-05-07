@@ -11,7 +11,8 @@ const C = {
   white: '#ffffff', bg: '#E2DFDB'
 };
 
-const PINEAPPLE_SVG = `<svg viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg" width="28" height="28"><rect fill="#2ea84a" width="160" height="160"/><path fill="#fff" d="M80,51.52c-5.97-12.84-18.98-21.74-34.08-21.74-5.34,0-10.42,1.11-15.01,3.12.89-.07,1.79-.11,2.69-.11,13.24,0,24.69,7.62,30.22,18.72h16.18Z"/><path fill="#fff" d="M126.4,32.79c.91,0,1.81.04,2.69.11-4.6-2.01-9.68-3.12-15.01-3.12-15.09,0-28.11,8.9-34.08,21.74h0s16.18,0,16.18,0c5.52-11.1,16.98-18.72,30.22-18.72Z"/><path fill="#fff" d="M107.04,21.15c-1.15-.34-2.33-.6-3.54-.78-.58-.09-1.17-.16-1.76-.2-.72-.06-1.46-.09-2.2-.09-.99,0-1.97.05-2.93.16-6.55.72-12.38,3.82-16.61,8.42-4.23-4.6-10.06-7.7-16.61-8.42-.96-.11-1.94-.16-2.93-.16-.74,0-1.47.03-2.2.09-.59.05-1.18.12-1.76.2-1.21.18-2.39.44-3.54.78-1.14.33-2.25.75-3.32,1.22.44.04.89.09,1.33.14,13.03,1.65,23.64,9.78,29.03,20.74,5.38-10.96,16-19.09,29.03-20.74.45-.06.89-.1,1.33-.14-1.07-.48-2.18-.89-3.32-1.22Z"/></svg>`;
+// BH logo mark — green square with white text (Gmail-safe, no SVG)
+const PINEAPPLE_SVG = `<div style="display:inline-block;width:28px;height:28px;background:#2EA84A;border-radius:4px;text-align:center;line-height:28px;font-family:'Poppins',sans-serif;font-size:11px;font-weight:800;color:#ffffff;vertical-align:middle;">BH</div>`;
 
 function renderStory(s) {
   const borderColor = s.type === 'threat' ? C.coral : s.type === 'watch' ? C.yellow : s.type === 'opp' ? C.turquoise : C.green;
