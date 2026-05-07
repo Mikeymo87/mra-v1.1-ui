@@ -2074,17 +2074,16 @@ app.post('/api/refresh-permits', async (req, res) => {
 // POST returns job ID immediately. Generation runs in background.
 // GET /api/newsletter-status/:jobId to poll for result.
 
-const newsletterJobs = new Map();
+let latestNewsletterResult = { status: 'idle' };
 
 app.post('/api/generate-newsletter', (req, res) => {
-  const jobId = `nl-${Date.now()}`;
   const forceRefresh = req.body?.force_permits === true;
 
-  newsletterJobs.set(jobId, { status: 'running', started: new Date().toISOString() });
-  console.log(`\n═══ Newsletter Job ${jobId} Started ═══`);
+  latestNewsletterResult = { status: 'running', started: new Date().toISOString() };
+  console.log('\n═══ Newsletter Generation Started ═══');
 
   // Return immediately
-  res.json({ status: 'accepted', job_id: jobId });
+  res.json({ status: 'accepted' });
 
   // Run generation in background
   (async () => {
@@ -2098,11 +2097,11 @@ app.post('/api/generate-newsletter', (req, res) => {
       let permitResult = { status: 'skipped', total_active: permitDb.prepare('SELECT COUNT(*) as n FROM permits WHERE is_active=1').get().n };
 
       if (forceRefresh || daysSinceRefresh >= 25) {
-        console.log(`[${jobId}] Refreshing permits (${Math.round(daysSinceRefresh)} days since last)...`);
+        console.log(`[Newsletter] Refreshing permits (${Math.round(daysSinceRefresh)} days since last)...`);
         const { refreshPermits } = require('./scripts/refresh-permits');
         permitResult = await refreshPermits();
       } else {
-        console.log(`[${jobId}] Skipping permit refresh (${Math.round(daysSinceRefresh)} days ago, ${permitResult.total_active} active)`);
+        console.log(`[Newsletter] Skipping permit refresh (${Math.round(daysSinceRefresh)} days ago, ${permitResult.total_active} active)`);
       }
 
       // Step 2: Build prompt
@@ -2231,7 +2230,7 @@ Output ONLY the JSON object. No markdown, no commentary, no code fences.`;
 
       while (iterations < 12) {
         iterations++;
-        console.log(`[${jobId}] Iteration ${iterations}...`);
+        console.log(`[Newsletter] Iteration ${iterations}...`);
 
         const response = await anthropic.messages.create({
           model: 'claude-sonnet-4-6',
@@ -2287,7 +2286,7 @@ Output ONLY the JSON object. No markdown, no commentary, no code fences.`;
       const outputDir = path.join(__dirname, 'data');
       const outputPath = path.join(outputDir, filename);
       fs.writeFileSync(outputPath, html, 'utf-8');
-      console.log(`[${jobId}] Saved: ${outputPath}`);
+      console.log(`[Newsletter] Saved: ${outputPath}`);
 
       const duration = Date.now() - startTime;
       const costCents = ((totalInputTokens * 3 / 1000000) + (totalOutputTokens * 15 / 1000000)) * 100;
@@ -2298,10 +2297,10 @@ Output ONLY the JSON object. No markdown, no commentary, no code fences.`;
 
       sessions.delete(sessionId);
 
-      console.log(`\n═══ Job ${jobId} Complete ═══`);
+      console.log(`\n═══ Newsletter Complete ═══`);
       console.log(`Iterations: ${iterations} | Cost: ~$${(costCents/100).toFixed(2)} | Time: ${(duration/1000).toFixed(0)}s\n`);
 
-      newsletterJobs.set(jobId, {
+      latestNewsletterResult = {
         status: 'success',
         filename,
         iterations,
@@ -2309,20 +2308,18 @@ Output ONLY the JSON object. No markdown, no commentary, no code fences.`;
         estimated_cost_cents: Math.round(costCents),
         duration_ms: duration,
         permits: permitResult
-      });
+      };
 
     } catch (err) {
-      console.error(`[${jobId}] Error:`, err.message);
-      newsletterJobs.set(jobId, { status: 'error', message: err.message });
+      console.error('[Newsletter] Error:', err.message);
+      latestNewsletterResult = { status: 'error', message: err.message };
     }
   })();
 });
 
-// Poll for newsletter job status
-app.get('/api/newsletter-status/:jobId', (req, res) => {
-  const job = newsletterJobs.get(req.params.jobId);
-  if (!job) return res.status(404).json({ status: 'not_found' });
-  res.json(job);
+// Poll for latest newsletter generation status
+app.get('/api/newsletter-status', (req, res) => {
+  res.json(latestNewsletterResult);
 });
 
 // Serve generated newsletter HTML files
