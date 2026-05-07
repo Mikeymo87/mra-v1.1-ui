@@ -614,7 +614,15 @@
 
     function ensureBubble() {
       if (bubbleEl) return;
-      removeEl(thinkingId);
+      // Don't destroy thinking element yet — tool timeline may still be updating
+      // Just hide the dots, keep the timeline visible
+      const thinkEl = document.getElementById(thinkingId);
+      if (thinkEl) {
+        const dots = thinkEl.querySelector('.dots');
+        const span = thinkEl.querySelector('.thinking > span');
+        if (dots) dots.style.display = 'none';
+        if (span) span.style.display = 'none';
+      }
       wrapEl = mkWrap('agent');
       const label = mkLabel('BH Market Research Agent');
       bubbleEl = document.createElement('div');
@@ -715,6 +723,9 @@
     // Final render
     clearTimeout(renderTimer);
     renderMarkdown();
+
+    // NOW remove thinking element — tool timeline is done
+    removeEl(thinkingId);
 
     // Add action buttons
     if (wrapEl && markdown) {
