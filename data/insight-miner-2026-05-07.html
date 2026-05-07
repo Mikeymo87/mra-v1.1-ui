@@ -1,0 +1,987 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Insight Miner &mdash; April 20 – May 3, 2026</title>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --green: #2EA84A;
+    --mint: #7DE69B;
+    --black: #25282A;
+    --turquoise: #59BEC9;
+    --coral: #E5554F;
+    --yellow: #FFCD00;
+    --dark-blue: #0D5F78;
+    --deep-green: #1D4D52;
+    --deep-blue: #1D4A5E;
+    --off-white: #F5F4F2;
+    --warm-bg: #FAFAF8;
+    --light: #F8F7F5;
+    --medium-gray: #999898;
+    --dark-gray: #56595A;
+    --border: #E2DFDB;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', Helvetica, Arial, sans-serif;
+    color: var(--black);
+    background: #E2DFDB;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .container {
+    max-width: 780px;
+    margin: 32px auto;
+    background: #fff;
+    overflow: hidden;
+    box-shadow: 0 4px 40px rgba(0,0,0,0.12);
+  }
+
+  /* ═══ MASTHEAD (dark, compact) ═══ */
+  .masthead {
+    background: var(--black);
+    padding: 14px 40px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .mast-left { display: flex; align-items: center; gap: 12px; }
+  .pineapple { width: 28px; height: 28px; border-radius: 4px; overflow: hidden; flex-shrink: 0; }
+  .pineapple svg { width: 28px; height: 28px; }
+  .mast-name {
+    font-family: 'Poppins', sans-serif;
+    font-weight: 800;
+    font-size: 14px;
+    letter-spacing: 0.2em;
+    color: #fff;
+    line-height: 1;
+  }
+  .mast-right {
+    text-align: right;
+    font-size: 9px;
+    color: var(--medium-gray);
+    line-height: 1.4;
+  }
+  .mast-right .vol {
+    font-family: 'Poppins', sans-serif;
+    font-weight: 700;
+    font-size: 8.5px;
+    letter-spacing: 0.12em;
+    color: var(--green);
+  }
+
+  /* ═══ GREEN RULE ═══ */
+  .brand-rule { height: 3px; background: var(--green); }
+
+  /* ═══ HERO (white, clean) ═══ */
+  .hero {
+    background: #fff;
+    padding: 40px 40px 20px;
+  }
+  .hero-eyebrow {
+    font-family: 'Poppins', sans-serif;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--green);
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .hero-eyebrow::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+  .hero h1 {
+    font-family: 'Poppins', sans-serif;
+    font-size: 30px;
+    font-weight: 800;
+    color: var(--black);
+    line-height: 1.15;
+    max-width: 660px;
+    margin-bottom: 0;
+  }
+  .hero h1 em {
+    font-style: normal;
+    color: var(--green);
+  }
+
+  /* ═══ EXEC SUMMARY (dark card, visually separate) ═══ */
+  .exec-wrap {
+    padding: 0 40px 36px;
+    background: #fff;
+  }
+  .exec-box {
+    background: var(--black);
+    border-radius: 8px;
+    padding: 26px 28px;
+  }
+  .exec-label {
+    font-family: 'Poppins', sans-serif;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--mint);
+    margin-bottom: 14px;
+  }
+  .exec-list { list-style: none; padding: 0; margin: 0; }
+  .exec-list li {
+    padding: 7px 0;
+    font-size: 13px;
+    color: rgba(255,255,255,0.7);
+    line-height: 1.55;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    display: flex;
+    gap: 10px;
+  }
+  .exec-list li:last-child { border-bottom: none; }
+  .exec-list li strong { color: #fff; }
+  .exec-bullet {
+    color: var(--green);
+    font-weight: 700;
+    font-size: 15px;
+    flex-shrink: 0;
+    line-height: 1.5;
+  }
+
+  /* ═══ STATS STRIP (dark) ═══ */
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    background: var(--black);
+  }
+  .stat {
+    padding: 20px;
+    text-align: center;
+    border-right: 1px solid rgba(255,255,255,0.06);
+  }
+  .stat:last-child { border-right: none; }
+  .stat .num {
+    font-family: 'Poppins', sans-serif;
+    font-size: 24px;
+    font-weight: 800;
+    color: #fff;
+  }
+  .stat .lbl {
+    font-size: 9px;
+    font-weight: 500;
+    color: rgba(255,255,255,0.4);
+    letter-spacing: 0.03em;
+    margin-top: 3px;
+    line-height: 1.3;
+  }
+
+  /* ═══ TOC ═══ */
+  .toc {
+    padding: 14px 40px;
+    background: var(--off-white);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .toc-label {
+    font-family: 'Poppins', sans-serif;
+    font-size: 7.5px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--medium-gray);
+    margin-right: 4px;
+  }
+  .toc a {
+    font-size: 10.5px;
+    font-weight: 600;
+    color: var(--dark-gray);
+    text-decoration: none;
+    padding: 3px 10px;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    background: #fff;
+    transition: all 0.15s;
+  }
+  .toc a:hover { border-color: var(--green); color: var(--green); }
+
+  /* ═══ SECTIONS ═══ */
+  .section {
+    padding: 44px 40px 40px;
+    border-bottom: 1px solid var(--border);
+    background: #fff;
+  }
+  .section.alt { background: var(--off-white); }
+
+  .sec-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 6px;
+  }
+  .sec-num {
+    font-family: 'Poppins', sans-serif;
+    font-size: 10px;
+    font-weight: 700;
+    color: #fff;
+    background: var(--black);
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 5px;
+    flex-shrink: 0;
+  }
+  .sec-tag {
+    font-family: 'Poppins', sans-serif;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--medium-gray);
+  }
+
+  h2 {
+    font-family: 'Poppins', sans-serif;
+    font-size: 23px;
+    font-weight: 800;
+    color: var(--black);
+    line-height: 1.2;
+    margin-bottom: 6px;
+  }
+  .sec-intro {
+    font-size: 14px;
+    color: var(--dark-gray);
+    margin-bottom: 20px;
+    line-height: 1.55;
+  }
+
+  h3 {
+    font-family: 'Poppins', sans-serif;
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--black);
+    margin: 32px 0 10px;
+    padding-top: 8px;
+    line-height: 1.3;
+  }
+
+  p { font-size: 14px; color: var(--dark-gray); margin-bottom: 12px; }
+  p:last-child { margin-bottom: 0; }
+  strong { color: var(--black); }
+
+  /* ═══ STORY CARDS ═══ */
+  .story {
+    margin: 18px 0;
+    padding: 24px;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    border-left: 4px solid var(--green);
+  }
+  .alt .story { background: #fff; }
+  .story.threat { border-left-color: var(--coral); }
+  .story.watch { border-left-color: var(--yellow); }
+  .story.opp { border-left-color: var(--turquoise); }
+
+  .tag {
+    font-family: 'Poppins', sans-serif;
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 3px;
+    margin-bottom: 8px;
+  }
+  .t-red { background: #FDECEB; color: var(--coral); }
+  .t-yellow { background: #FFF8E1; color: #B8860B; }
+  .t-blue { background: #E8F6F8; color: var(--dark-blue); }
+  .t-gray { background: #F0EFED; color: var(--dark-gray); }
+
+  .story h4 {
+    font-family: 'Poppins', sans-serif;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--black);
+    margin-bottom: 8px;
+    line-height: 1.3;
+  }
+
+  /* ═══ MARKETING IMPACT ═══ */
+  .mi {
+    margin-top: 14px;
+    padding: 14px 16px;
+    background: #f4f9f5;
+    border-radius: 5px;
+    border: 1px solid #d5edda;
+  }
+  .mi-label {
+    font-family: 'Poppins', sans-serif;
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--green);
+    margin-bottom: 6px;
+  }
+  .mi p { font-size: 12.5px; margin: 0; line-height: 1.55; color: var(--dark-gray) !important; }
+  .mi strong { color: var(--black) !important; }
+
+  /* ═══ IMPACT DOTS ═══ */
+  .dots-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+  }
+  .dots-label {
+    font-family: 'Poppins', sans-serif;
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--medium-gray);
+  }
+  .dots { display: flex; gap: 3px; }
+  .d { width: 10px; height: 10px; border-radius: 50%; background: var(--border); }
+  .d.on { background: var(--coral); }
+
+  /* ═══ SOURCES ═══ */
+  .src {
+    font-size: 10px !important;
+    color: var(--medium-gray) !important;
+    margin-top: 10px !important;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+  }
+  .src a {
+    color: var(--green);
+    text-decoration: none;
+    font-weight: 600;
+    transition: color 0.15s;
+  }
+  .src a:hover { color: var(--dark-blue); text-decoration: underline; }
+
+  /* ═══ CHARTS ═══ */
+  .chart {
+    background: var(--off-white);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 22px;
+    margin: 18px 0;
+  }
+  .chart-title {
+    font-family: 'Poppins', sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--dark-gray);
+    margin-bottom: 16px;
+  }
+  .bar-row {
+    display: grid;
+    grid-template-columns: 110px 1fr 55px;
+    align-items: center;
+    gap: 10px;
+    margin: 7px 0;
+  }
+  .bar-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--black);
+    text-align: right;
+  }
+  .bar-track {
+    height: 20px;
+    background: #E8E6E3;
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .bar-fill { height: 100%; border-radius: 3px; }
+  .bar-val {
+    font-family: 'Poppins', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--black);
+  }
+  .chart-note {
+    font-size: 9.5px !important;
+    color: var(--medium-gray) !important;
+    margin-top: 12px !important;
+    font-style: italic;
+  }
+
+  /* ═══ METRIC CARDS ═══ */
+  .metrics {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin: 20px 0;
+  }
+  .mc {
+    padding: 20px;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    border-top: 3px solid var(--green);
+  }
+  .mc.red { border-top-color: var(--coral); }
+  .mc.blue { border-top-color: var(--turquoise); }
+  .mc.yellow { border-top-color: var(--yellow); }
+  .mc .num {
+    font-family: 'Poppins', sans-serif;
+    font-size: 24px;
+    font-weight: 800;
+    color: var(--black);
+    line-height: 1.1;
+  }
+  .mc .desc {
+    font-size: 11.5px;
+    color: var(--dark-gray);
+    margin-top: 4px;
+    line-height: 1.4;
+  }
+
+  /* ═══ TABLES ═══ */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0;
+    font-size: 12px;
+  }
+  thead th {
+    font-family: 'Poppins', sans-serif;
+    font-size: 8.5px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #fff;
+    background: var(--black);
+    text-align: left;
+    padding: 10px 12px;
+  }
+  thead th:first-child { border-radius: 4px 0 0 0; }
+  thead th:last-child { border-radius: 0 4px 0 0; }
+  tbody td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    color: var(--dark-gray);
+    vertical-align: top;
+  }
+  tbody tr:nth-child(even) { background: var(--off-white); }
+  .bdg {
+    display: inline-block;
+    font-family: 'Poppins', sans-serif;
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    padding: 2px 7px;
+    border-radius: 3px;
+  }
+  .bdg-g { background: #E8F5E9; color: #2E7D32; }
+  .bdg-b { background: #E3F2FD; color: #1565C0; }
+
+  /* ═══ CALLOUTS ═══ */
+  .callout {
+    margin: 22px 0;
+    padding: 20px 22px;
+    background: var(--black);
+    border-radius: 6px;
+  }
+  .cl {
+    font-family: 'Poppins', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--mint);
+    margin-bottom: 6px;
+  }
+  .callout p { font-size: 13px; color: rgba(255,255,255,0.7); }
+  .callout strong { color: #fff; }
+
+  /* ═══ SECTION DARK (M&A) ═══ */
+  .section-dark {
+    padding: 44px 40px 40px;
+    background: var(--black);
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .section-dark h2, .section-dark h3, .section-dark h4, .section-dark strong { color: #fff; }
+  .section-dark p { color: rgba(255,255,255,0.65); }
+  .section-dark .sec-tag { color: rgba(255,255,255,0.4); }
+  .section-dark .sec-num { background: var(--green); }
+  .section-dark .story { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.08); }
+  .section-dark .story h4 { color: #fff; }
+  .section-dark .callout { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08); }
+  .section-dark .cl { color: var(--mint); }
+  .section-dark .callout p { color: rgba(255,255,255,0.65); }
+  .section-dark .callout strong { color: #fff; }
+  .section-dark .chart { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.08); }
+  .section-dark .chart-title { color: rgba(255,255,255,0.45); }
+  .section-dark .bar-label { color: rgba(255,255,255,0.6); }
+  .section-dark .bar-track { background: rgba(255,255,255,0.06); }
+  .section-dark .bar-val { color: #fff; }
+
+  /* ═══ INSIGHTS ═══ */
+  .insight {
+    display: flex;
+    gap: 16px;
+    padding: 18px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .insight:last-child { border-bottom: none; }
+  .i-num {
+    font-family: 'Poppins', sans-serif;
+    font-size: 13px;
+    font-weight: 800;
+    color: #fff;
+    background: var(--black);
+    min-width: 34px;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    flex-shrink: 0;
+  }
+  .insight h4 { font-family: 'Poppins'; font-size: 13.5px; font-weight: 700; color: var(--black); margin-bottom: 4px; line-height: 1.3; }
+  .insight p { font-size: 12.5px; margin: 0; line-height: 1.55; }
+
+  /* ═══ BULLETS ═══ */
+  ul.clean { list-style: none; padding: 0; margin: 8px 0; }
+  ul.clean li {
+    padding: 3px 0 3px 16px;
+    position: relative;
+    font-size: 13px;
+    color: var(--dark-gray);
+  }
+  ul.clean li::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 11px;
+    width: 5px;
+    height: 5px;
+    background: var(--green);
+    border-radius: 50%;
+  }
+
+  /* ═══ DIVIDERS ═══ */
+  .sep { height: 3px; background: var(--green); }
+
+  /* ═══ FOOTER ═══ */
+  .footer {
+    background: var(--black);
+    padding: 32px 40px;
+    text-align: center;
+  }
+  .f-logo {
+    font-family: 'Poppins';
+    font-weight: 800;
+    font-size: 12px;
+    letter-spacing: 0.2em;
+    color: #fff;
+    margin-bottom: 2px;
+  }
+  .f-sub {
+    font-size: 9px;
+    color: var(--medium-gray);
+    margin-bottom: 16px;
+  }
+  .f-sources {
+    font-size: 8.5px;
+    color: rgba(255,255,255,0.2);
+    line-height: 1.8;
+  }
+  .f-badge {
+    display: inline-block;
+    margin-top: 14px;
+    font-family: 'Poppins';
+    font-size: 7.5px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--mint);
+    border: 1px solid rgba(125,230,155,0.2);
+    border-radius: 3px;
+    padding: 4px 12px;
+  }
+
+  @media (max-width: 700px) {
+    .container { margin: 0; }
+    .masthead, .hero, .exec-wrap, .section, .section-dark, .toc, .footer { padding-left: 20px; padding-right: 20px; }
+    .hero h1 { font-size: 24px; }
+    .stats { grid-template-columns: 1fr 1fr; }
+    .metrics { grid-template-columns: 1fr; }
+    .bar-row { grid-template-columns: 80px 1fr 40px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+  <!-- MASTHEAD -->
+  <div class="masthead">
+    <div class="mast-left">
+      <div class="pineapple"><svg viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg"><rect fill="#2ea84a" width="160" height="160"/><path fill="#fff" d="M80,51.52c-5.97-12.84-18.98-21.74-34.08-21.74-5.34,0-10.42,1.11-15.01,3.12.89-.07,1.79-.11,2.69-.11,13.24,0,24.69,7.62,30.22,18.72h16.18Z"/><path fill="#fff" d="M126.4,32.79c.91,0,1.81.04,2.69.11-4.6-2.01-9.68-3.12-15.01-3.12-15.09,0-28.11,8.9-34.08,21.74h0s16.18,0,16.18,0c5.52-11.1,16.98-18.72,30.22-18.72Z"/><path fill="#fff" d="M107.04,21.15c-1.15-.34-2.33-.6-3.54-.78-.58-.09-1.17-.16-1.76-.2-.72-.06-1.46-.09-2.2-.09-.99,0-1.97.05-2.93.16-6.55.72-12.38,3.82-16.61,8.42-4.23-4.6-10.06-7.7-16.61-8.42-.96-.11-1.94-.16-2.93-.16-.74,0-1.47.03-2.2.09-.59.05-1.18.12-1.76.2-1.21.18-2.39.44-3.54.78-1.14.33-2.25.75-3.32,1.22.44.04.89.09,1.33.14,13.03,1.65,23.64,9.78,29.03,20.74,5.38-10.96,16-19.09,29.03-20.74.45-.06.89-.1,1.33-.14-1.07-.48-2.18-.89-3.32-1.22Z"/><path fill="#fff" d="M80,22.43c4.16-4.58,9.89-7.67,16.33-8.39.95-.11,1.91-.16,2.88-.16.44,0,.88.01,1.32.03-1.82-.76-3.73-1.29-5.7-1.56-.99-.13-1.99-.2-3.01-.2-.76,0-1.51.04-2.25.11-.61.06-1.21.15-1.81.26-1.24.23-2.45.56-3.64.99-3.05,1.11-5.88,2.86-8.39,5.13,1.55,1.1,2.98,2.37,4.26,3.77Z"/><polygon fill="#fff" points="85.08 112.17 73.02 102.44 82.74 90.38 94.8 100.1 85.08 112.17"/><polygon fill="#fff" points="76.32 133.19 86.04 121.13 98.11 130.85 88.38 142.91 76.32 133.19"/><polygon fill="#fff" points="91.5 69.36 81.78 81.42 69.71 71.7 79.44 59.63 91.5 69.36"/><polygon fill="#fff" points="111.83 113.83 102.1 125.89 90.04 116.17 99.76 104.1 111.83 113.83"/><path fill="#fff" d="M51.03,84.72l-7.13-5.75c1.9-5.14,4.45-9.81,7.51-13.85l9.34,7.53-9.72,12.06Z"/><polygon fill="#fff" points="77.78 86.38 68.05 98.45 55.99 88.72 65.71 76.66 77.78 86.38"/><polygon fill="#fff" points="42.27 105.75 51.99 93.68 64.06 103.41 54.33 115.47 42.27 105.75"/><path fill="#fff" d="M72.32,138.15l11.86,9.56c-1.27.09-2.57.13-3.9.13-5.25,0-9.97-.69-14.16-2l6.2-7.7Z"/><path fill="#fff" d="M41.89,85.54l5.14,4.14-6.9,8.56c.17-4.4.78-8.66,1.77-12.71Z"/><polygon fill="#fff" points="81.08 117.13 71.36 129.19 59.29 119.47 69.02 107.41 81.08 117.13"/><path fill="#fff" d="M107.06,129.89l9.72-12.06,1.55,1.25c-1.46,5.56-3.67,10.45-6.65,14.54l-4.62-3.73Z"/><path fill="#fff" d="M119.92,92.26c.37,2.79.56,5.65.56,8.57,0,.77,0,1.54-.03,2.29l-4.62,5.74-12.06-9.72,9.72-12.06,6.43,5.19Z"/><path fill="#fff" d="M103.07,134.85l4.4,3.55c-3.65,3.4-8.09,5.96-13.34,7.55l8.94-11.1Z"/><path fill="#fff" d="M48.41,132.97l6.89-8.54,12.06,9.72-7.37,9.15c-4.71-2.51-8.56-5.99-11.58-10.33Z"/><path fill="#fff" d="M112.52,78.12l-12.06-9.72,5.59-6.94c3.57,3.81,6.61,8.4,8.97,13.56l-2.5,3.1Z"/><path fill="#fff" d="M50.33,120.43l-5.31,6.59c-1.93-4.2-3.29-8.94-4.08-14.16l9.39,7.57Z"/><polygon fill="#fff" points="98.8 95.14 86.74 85.42 96.46 73.36 108.53 83.08 98.8 95.14"/><path fill="#fff" d="M55.61,60.33c1.28-1.27,2.62-2.45,4.02-3.52h13.91l-8.78,10.89-9.15-7.37Z"/><path fill="#fff" d="M101.35,57.14l-5.85,7.26-9.42-7.59h14.85c.14.11.28.22.42.33Z"/></svg></div>
+      <div class="mast-name">INSIGHT MINER</div>
+    </div>
+    <div class="mast-right">
+      <div class="vol">Vol. 1 — Issue 02</div>
+      Baptist Health South Florida
+    </div>
+  </div>
+  <div class="brand-rule"></div>
+
+  <!-- HERO -->
+  <div class="hero">
+    <div class="hero-eyebrow">Bi-Weekly Market Intelligence &mdash; April 20 – May 3, 2026</div>
+    <h1>Palm Beach is the new battleground: <em>three systems open or break ground in 30 days</em></h1>
+  </div>
+
+  <!-- EXEC SUMMARY -->
+  <div class="exec-wrap">
+    <div class="exec-box">
+      <div class="exec-label">Executive Summary</div>
+      <ul class="exec-list">
+        <li><span class="exec-bullet">&rsaquo;</span> <span>Universal Health Services opened the $430 million Alan B. Miller Medical Center in Palm Beach Gardens in May 2026 — a brand-new, 156-bed competitor just miles from Baptist Health's Bethesda footprint.</span></li>
+        <li><span class="exec-bullet">&rsaquo;</span> <span>HCA Florida Kendall Hospital filed plans for a major Miami-Dade expansion adding 210 beds and a medical office building — the largest single-campus bed addition in our Primary Service Area this cycle.</span></li>
+        <li><span class="exec-bullet">&rsaquo;</span> <span>Cleveland Clinic is pressing ahead on two simultaneous Palm Beach County projects: a $500 million, 200-bed academic medical center and a new outpatient ambulatory surgery center at 15 CityPlace opening November 2027.</span></li>
+        <li><span class="exec-bullet">&rsaquo;</span> <span>The federal 'One Big Beautiful Bill' reconciliation package, advancing in Congress, would impose Medicaid work requirements estimated to strip coverage from up to 5.2 million Americans nationally — with Florida's large uninsured population disproportionately exposed.</span></li>
+        <li><span class="exec-bullet">&rsaquo;</span> <span>Big Tech's health AI war is in full swing: OpenAI, Amazon, Microsoft, and Epic all launched major clinical or consumer AI products this quarter — and HCA is already an early adopter of ChatGPT for Healthcare.</span></li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- STATS -->
+  <div class="stats">
+    <div class="stat"><div class="num">$1.71B+</div><div class="lbl">Total active construction value tracked across our Primary Service Area this cycle</div></div>
+    <div class="stat"><div class="num">3</div><div class="lbl">New competitor hospitals opened or broke ground in Palm Beach County alone</div></div>
+    <div class="stat"><div class="num">40M</div><div class="lbl">Americans using ChatGPT for health questions daily — before hospitals have a counter-strategy</div></div>
+    <div class="stat"><div class="num">$911B</div><div class="lbl">Estimated federal Medicaid spending reduction under the 2025 reconciliation law over 10 years (KFF)</div></div>
+  </div>
+
+  <!-- TOC -->
+  <div class="toc">
+    <span class="toc-label">In This Issue</span>
+    <a href="#s1">Primary Service Area News</a>
+    <a href="#s2">Competitive Intel</a>
+    <a href="#s3">AI &amp; Marketing Tech</a>
+    <a href="#s4">Permits</a>
+    <a href="#s5">Mergers &amp; Acquisitions</a>
+    <a href="#s6">Policy</a>
+    <a href="#s7">Insights</a>
+  </div>
+
+  <!-- S1: PSA NEWS -->
+  <div class="section" id="s1">
+    <div class="sec-head"><div class="sec-num">1</div><span class="sec-tag">Primary Service Area News</span></div>
+    <h2>The market moves that matter to Baptist Health's competitive position — right now.</h2>
+    
+    <div class="story threat">
+      <span class="tag t-red">NEW COMPETITOR — PALM BEACH</span>
+      <h4>Universal Health Services opens $430 million Alan B. Miller Medical Center in Palm Beach Gardens</h4>
+      <p>Universal Health Services has completed its <strong>$430 million, seven-story, 156-bed Alan B. Miller Medical Center</strong> on a 34-acre campus in Palm Beach Gardens, with a ribbon-cutting celebration marking its official opening for patient care in May 2026. The 365,000-square-foot facility features all private patient rooms (including six suites) and is designed for future bed expansion. The campus sits in the northern Palm Beach market — territory that Baptist Health has been building toward with its Bethesda West hospital. This is not a renovation or a wing addition. It is a fully new, purpose-built hospital from a national for-profit operator, landing in our fastest-growing county.</p>
+      <div class="mi"><div class="mi-label">Marketing Impact</div><p><strong>Move now on Palm Beach Gardens awareness.</strong> Universal Health Services will be running a ribbon-cutting media blitz and heavy local advertising. Our Bethesda West messaging needs to be in market simultaneously, emphasizing our nonprofit mission, physician quality, and community roots before Universal Health Services establishes brand equity in northern Palm Beach. Consider targeted digital campaigns in Palm Beach Gardens, Jupiter, and Juno Beach ZIP codes immediately.</p></div>
+      <div class="dots-row"><span class="dots-label">BH Impact</span><div class="dots"><span class="d on"></span><span class="d on"></span><span class="d on"></span><span class="d on"></span><span class="d on"></span></div></div>
+      <p class="src">Sources: <a href='https://uhs.com/news/alan-b-miller-medical-center-celebrates-ribbon-cutting/'>Universal Health Services Newsroom</a></p>
+    </div>
+
+    <div class="story threat">
+      <span class="tag t-red">EXPANSION — MIAMI-DADE</span>
+      <h4>HCA Florida Kendall Hospital plans three-building expansion adding 210 beds to Miami-Dade's most competitive corridor</h4>
+      <p>HCA Florida Kendall Hospital filed plans for a <strong>major multi-building expansion adding 210 beds</strong> and a new medical office building, according to the South Florida Business Journal. The project would involve three new structures on the existing campus, adding hundreds of jobs alongside the bed count. Kendall sits in one of Baptist Health's core Miami-Dade trade areas — this expansion directly presses into our Baptist Hospital and South Miami Hospital catchments. HCA has already been steadily building its South Florida inpatient and emergency footprint, having proposed two freestanding emergency departments earlier this year.</p>
+      <div class="mi"><div class="mi-label">Marketing Impact</div><p><strong>Competitive response required in the Kendall-Westchester corridor.</strong> HCA's Kendall expansion will generate sustained construction news coverage and eventually a major opening campaign. Marketing needs a proactive visibility strategy for Baptist Hospital and South Miami Hospital that reinforces our quality differentiation — Leapfrog scores, patient experience, physician depth — before HCA's new capacity opens and reshapes patient choice in this ZIP cluster.</p></div>
+      <div class="dots-row"><span class="dots-label">BH Impact</span><div class="dots"><span class="d on"></span><span class="d on"></span><span class="d on"></span><span class="d on"></span><span class="d on"></span></div></div>
+      <p class="src">Sources: <a href='https://www.bizjournals.com/southflorida/news/2026/04/29/hca-florida-kendall-hospital-plans-expansion.html'>South Florida Business Journal</a></p>
+    </div>
+
+    <div class="story threat">
+      <span class="tag t-red">EXPANSION — PALM BEACH</span>
+      <h4>Tenet Healthcare plans complete campus revitalization for Good Samaritan Medical Center in West Palm Beach</h4>
+      <p>Tenet Healthcare's Palm Beach Health Network has received approval to <strong>rebuild Good Samaritan Medical Center from the ground up</strong>, constructing a new hospital behind the existing building, demolishing the current facility, and redeveloping the site as a mixed-use healthcare and wellness campus. Plans include enhanced cardiac care, cancer care, neurosciences, and surgical capabilities, alongside a longevity and wellness center, workforce housing, and community wellness amenities. This transforms a legacy facility into a market-modern competitor directly in West Palm Beach — the same downtown market where Cleveland Clinic is simultaneously building its outpatient ambulatory surgery center at 15 CityPlace.</p>
+      <div class="mi"><div class="mi-label">Marketing Impact</div><p><strong>West Palm Beach is about to get very crowded, very fast.</strong> With Cleveland Clinic and Tenet both executing major projects in downtown West Palm Beach, our Bethesda footprint needs proactive positioning now — before these competitors open doors and capture the commercially insured professionals and wealth-management population migrating into Palm Beach County. A campaign anchored in care quality and community longevity would land well in this demographic.</p></div>
+      <div class="dots-row"><span class="dots-label">BH Impact</span><div class="dots"><span class="d on"></span><span class="d on"></span><span class="d on"></span><span class="d on"></span><span class="d"></span></div></div>
+      <p class="src">Sources: <a href='https://www.beckershospitalreview.com/capital/tenet-florida-hospital-plans-revamped-campus/'>Becker's Hospital Review</a></p>
+    </div>
+
+    <div class="story watch">
+      <span class="tag t-yellow">PAYER DYNAMICS — BROWARD</span>
+      <h4>Florida Blue and Cleveland Clinic reached a network agreement after a prolonged Broward County contract dispute</h4>
+      <p>Florida Blue and Cleveland Clinic Florida reached a <strong>last-minute in-network deal</strong> to keep Cleveland Clinic's Broward County hospitals in the Florida Blue network after an extended dispute that alarmed patients across the county. The resolution prevents a major disruption to Cleveland Clinic's Broward patient volume but signals ongoing payer-system tension in our market. Cleveland Clinic has also separately joined the 22 Health marketplace network operated through Community Care Plan, expanding its insured access further into Broward's commercially active population.</p>
+      <div class="mi"><div class="mi-label">Marketing Impact</div><p><strong>Payer instability is an acquisition opportunity for Baptist Health.</strong> During the months when Cleveland Clinic's Florida Blue status was uncertain, commercially insured Broward patients were actively researching alternatives. Many of them searched for BH. If we were not capturing that intent through search engine marketing and digital retargeting during the dispute window, we missed a real patient acquisition moment. Set up automated monitoring for competitor payer disruptions — they are recurring, and we should be ready to activate within 48 hours next time.</p></div>
+      <div class="dots-row"><span class="dots-label">BH Impact</span><div class="dots"><span class="d on"></span><span class="d on"></span><span class="d on"></span><span class="d"></span><span class="d"></span></div></div>
+      <p class="src">Sources: <a href='https://www.sun-sentinel.com/2026/02/27/florida-blue-and-cleveland-clinic-strike-deal-to-keep-broward-hospital-in-network/'>Sun Sentinel</a>, <a href='https://newsroom.clevelandclinic.org/2025/11/26/cleveland-clinic-joins-22-healths-marketplace-network-to-provide-greater-access-to-patient-care-in-broward-county-fla'>Cleveland Clinic Newsroom</a></p>
+    </div>
+
+    <div class="story watch">
+      <span class="tag t-yellow">MARKET ENTRY — MIAMI-DADE</span>
+      <h4>Mount Sinai Medical Center's new freestanding Westchester Emergency Center reaches structural topping-out milestone</h4>
+      <p>Mount Sinai Medical Center has reached the <strong>structural topping-out milestone</strong> for its new freestanding emergency center in Westchester, the western Miami-Dade community that sits directly in Baptist Health's primary trade area. The topping-out milestone indicates the structural framework is complete — interior buildout and opening are the remaining phases. Mount Sinai, whose main campus sits in Miami Beach, is making a deliberate geographic push westward into residential South Dade with this project. Baptist Health operates off-campus emergency departments in this corridor (Country Walk, Coral Way West, Palmetto Bay), but Mount Sinai's entry adds a credentialed competitor with a recognized brand.</p>
+      <div class="mi"><div class="mi-label">Marketing Impact</div><p><strong>Reinforce emergency care brand awareness in West Kendall and Westchester now.</strong> Mount Sinai's Westchester entry will generate significant opening press when it comes online. Our off-campus emergency departments in Country Walk and Coral Way West need active local awareness campaigns — including geofenced digital advertising and community sponsorships — to ensure residents already associate the Baptist Health name with emergency care in their neighborhood before Mount Sinai opens its doors.</p></div>
+      <div class="dots-row"><span class="dots-label">BH Impact</span><div class="dots"><span class="d on"></span><span class="d on"></span><span class="d on"></span><span class="d on"></span><span class="d"></span></div></div>
+      <p class="src">Sources: <a href='https://www.msmc.com/wp-content/uploads/2026/02/Mount_Sinai_Medical_Center_reaches_topping_out_milestone_for_new_Westchester_Emergency_Center_-_Flor_2026-02-15T22-35-04.pdf'>Mount Sinai Medical Center</a></p>
+    </div>
+
+    <div class="story">
+      <span class="tag t-gray">INFRASTRUCTURE — MIAMI-DADE</span>
+      <h4>Jackson Memorial Hospital opens its new expanded emergency room — one of the largest in the nation</h4>
+      <p>Jackson Health System has completed and opened its new, <strong>expanded emergency room at Jackson Memorial Hospital</strong>, now operational at 1026 NW 19th St in Miami. The $300 million project was described at groundbreaking as designed to become one of the largest and most advanced emergency rooms in the nation. Jackson serves a predominantly Medicaid and uninsured population at its main campus, making this less of a direct commercial competitor to Baptist Health and more of a significant capacity addition for Miami-Dade's safety-net infrastructure. Still worth watching for indirect market effects — as Jackson absorbs more volume, it may reduce referral pressure on other systems.</p>
+      <div class="mi"><div class="mi-label">Marketing Impact</div><p><strong>Limited direct commercial threat — but watch for halo effect.</strong> A dramatically renovated Jackson emergency room may attract earned media and community goodwill that boosts Jackson's overall brand perception. Monitor whether Jackson pursues any commercial patient messaging around the new facility. If they do, our emergency care differentiation messaging should emphasize quality, speed, and the full Baptist Health network behind every emergency visit — not just bed count.</p></div>
+      <div class="dots-row"><span class="dots-label">BH Impact</span><div class="dots"><span class="d on"></span><span class="d on"></span><span class="d"></span><span class="d"></span><span class="d"></span></div></div>
+      <p class="src">Sources: <a href='https://www.facebook.com/JacksonHealth/videos/-the-future-of-care-is-taking-shapeconstruction-continues-on-the-emergency-room-/2730653257297773/'>Jackson Health System</a></p>
+    </div>
+  </div>
+
+  <!-- S2: COMPETITIVE INTELLIGENCE -->
+  <div class="section alt" id="s2">
+    <div class="sec-head"><div class="sec-num">2</div><span class="sec-tag">Competitive Intelligence</span></div>
+    <h2>Who is building, buying, and positioning in our four-county market — and what it costs them.</h2>
+
+    <div class="chart">
+      <div class="chart-title">Competitor Capital Investment in the Primary Service Area &mdash; Active Projects</div>
+      <div class="bar-row"><div class="bar-label">Memorial Healthcare System</div><div class="bar-track"><div class="bar-fill" style="width:95%;background:var(--coral);"></div></div><div class="bar-val">$670M</div></div>
+      <div class="bar-row"><div class="bar-label">Cleveland Clinic Florida (Palm Beach)</div><div class="bar-track"><div class="bar-fill" style="width:72%;background:var(--coral);"></div></div><div class="bar-val">$500M</div></div>
+      <div class="bar-row"><div class="bar-label">Universal Health Services (Alan B. Miller)</div><div class="bar-track"><div class="bar-fill" style="width:62%;background:var(--coral);"></div></div><div class="bar-val">$430M</div></div>
+      <div class="bar-row"><div class="bar-label">Jackson Health System (Emergency Room)</div><div class="bar-track"><div class="bar-fill" style="width:43%;background:var(--coral);"></div></div><div class="bar-val">$300M</div></div>
+      <div class="bar-row"><div class="bar-label">Jupiter Medical Center (Donahue Tower)</div><div class="bar-track"><div class="bar-fill" style="width:16%;background:var(--coral);"></div></div><div class="bar-val">$110M</div></div>
+      <div class="bar-row"><div class="bar-label">Broward Health (North Medical Office Building)</div><div class="bar-track"><div class="bar-fill" style="width:8%;background:var(--muted);"></div></div><div class="bar-val">TBD</div></div>
+    </div>
+
+    
+    <div class="story threat">
+      <span class="tag t-red">CAPITAL INVESTMENT — BROWARD</span>
+      <h4>Memorial Healthcare System's $670 million Hollywood expansion is the largest single hospital project in Broward history</h4>
+      <p>Memorial Regional Hospital in Hollywood has received unanimous board approval for a <strong>$670 million, two-phase surgical and patient bed tower</strong>. The project adds 150 acuity-adaptable beds and 21 new operating rooms — including a hybrid operating room — across more than 400,000 square feet of new construction. Phase one, the surgical tower, is targeted for completion in 2029; a connector to the existing facility completes by 2031. Memorial is a county-owned system with significant public funding backing. This is a direct competitive intensification in Broward, where Baptist Health is simultaneously building its Sunrise Hospital. Two major hospital expansions in the same county opening within the same year is an unusual market dynamic that will reshape Broward's inpatient competitive landscape by 2029.</p>
+      <div class="mi"><div class="mi-label">Marketing Impact</div><p><strong>The Broward inpatient battle begins now, opens in 2029.</strong> Memorial's surgical expansion and our Sunrise Hospital opening will land at roughly the same time. The marketing team needs to begin building BH's brand equity in Broward County today — three years before either facility opens. Patient loyalty, physician relationships, and employer contracting decisions are being made now for care they'll receive in 2028 and beyond. A sustained Broward awareness campaign starting in 2026 is not premature — it's essential.</p></div>
+      <div class="dots-row"><span class="dots-label">BH Impact</span><div class="dots"><span class="d on"></span><span class="d on"></span><span class="d on"></span><span class="d on"></span><span class="d on"></span></div></div>
+      <p class="src">Sources: <a href='https://floridayimby.com/2025/07/memorial-regional-hospital-moves-forward-with-670-million-expansion-in-hollywood.html'>Florida Yimby</a></p>
+    </div>
+
+    <div class="story threat">
+      <span class="tag t-red">NEW CAMPUS — PALM BEACH</span>
+      <h4>Cleveland Clinic's Palm Beach County double move: $500 million hospital plus CityPlace ambulatory surgery center</h4>
+      <p>Cleveland Clinic Florida is executing a two-pronged Palm Beach strategy simultaneously. First, its <strong>$500 million, 200-bed academic medical center</strong> — the flagship project — is approved and on track to open by end of 2029, with the system having raised more than $180 million in philanthropic contributions. Second, a <strong>new outpatient and ambulatory surgery center at 15 CityPlace in West Palm Beach</strong> is under construction and opening in November 2027 — nearly quadrupling the current health center's footprint. The CityPlace location targets the affluent, commercially insured professional population flooding into downtown West Palm Beach and the surrounding Northwood and Flamingo Park neighborhoods.</p>
+      <div class="mi"><div class="mi-label">Marketing Impact</div><p><strong>Cleveland Clinic's 2027 CityPlace opening is the near-term threat to prioritize.</strong> The $500 million hospital is a 2029 problem — but the ambulatory surgery center at CityPlace opens in November 2027. That is 18 months away. Our marketing team should be building awareness among the commercially insured, wealth-adjacent West Palm Beach population now — before Cleveland Clinic's CityPlace facility opens and becomes the default premium-brand option in that ZIP code cluster.</p></div>
+      <div class="dots-row"><span class="dots-label">BH Impact</span><div class="dots"><span class="d on"></span><span class="d on"></span><span class="d on"></span><span class="d on"></span><span class="d on"></span></div></div>
+      <p class="src">Sources: <a href='https://newsroom.clevelandclinic.org/2026/02/22/cleveland-clinic-highlights-growth-and-strategic-momentum-in-palm-beach-county'>Cleveland Clinic Newsroom</a>, <a href='https://open.substack.com/pub/rachelbarksdale/p/florida-healthcare-expansion-2026'>Florida Healthcare Expansion Analysis</a></p>
+    </div>
+
+    <div class="story watch">
+      <span class="tag t-yellow">EXPANSION — BROWARD</span>
+      <h4>Broward Health breaks ground on medical office building at Broward Health North and expands specialty services</h4>
+      <p>Broward Health has broken ground on a <strong>new medical office building at its Broward Health North campus</strong> in Deerfield Beach and announced a separate specialty and outpatient services expansion at the same location. While financial details have not been disclosed, the dual move signals Broward Health's intent to compete more aggressively in northern Broward's commercially active population — a market that Cleveland Clinic also targets. Broward Health and Memorial together provided approximately $800 million in community benefit care last year, supported by $260 million in tax revenue, underlining their public-sector financial muscle.</p>
+      <div class="mi"><div class="mi-label">Marketing Impact</div><p><strong>Northern Broward is becoming a four-way fight.</strong> Broward Health, Cleveland Clinic, HCA Florida, and soon Baptist Health Sunrise are all making moves in the same geography. Our Sunrise Hospital marketing strategy should map exactly which patient populations each competitor is targeting in north Broward and define BH's unique positioning — starting with the commercially insured 18 to 64 cohort that is underserved by the county's tax-funded systems.</p></div>
+      <div class="dots-row"><span class="dots-label">BH Impact</span><div class="dots"><span class="d on"></span><span class="d on"></span><span class="d on"></span><span class="d"></span><span class="d"></span></div></div>
+      <p class="src">Sources: <a href='https://southfloridahospitalnews.com/broward-health-breaks-ground-on-new-medical-office-building-at-broward-health-north/'>South Florida Hospital News</a></p>
+    </div>
+
+    <div class="story watch">
+      <span class="tag t-yellow">EXPANSION — PALM BEACH</span>
+      <h4>Jupiter Medical Center opens $110 million Donahue Patient Care Tower with cardiovascular, orthopedic, and oncology focus</h4>
+      <p>Jupiter Medical Center has completed and opened its <strong>$110 million, five-story Tim and Jayne Donahue Patient Care Tower</strong> — adding 92 beds with dedicated departments for cardiovascular, orthopedic, and oncology care, supported by an 845-space parking structure. Jupiter Medical Center is an independent community hospital in northern Palm Beach County, and this tower expansion significantly increases its specialty care capacity in three of our highest-value service lines. The combination of cardiovascular and oncology programs at a community hospital just north of Palm Beach Gardens is a direct competitive signal in territory where Baptist Health is expanding its Bethesda network.</p>
+      <div class="mi"><div class="mi-label">Marketing Impact</div><p><strong>Jupiter Medical just upgraded its specialty care game in our northern Palm Beach territory.</strong> Cardiovascular, orthopedics, and oncology are three of Baptist Health's highest-revenue and highest-margin service lines. A community hospital adding dedicated floors for all three simultaneously deserves a proactive response. Consider a physician engagement campaign in Jupiter and Tequesta targeting cardiologists and oncologists who may have informal referral relationships with Jupiter Medical — and make the case for Baptist Health's network depth and subspecialty access.</p></div>
+      <div class="dots-row"><span class="dots-label">BH Impact</span><div class="dots"><span class="d on"></span><span class="d on"></span><span class="d on"></span><span class="d"></span><span class="d"></span></div></div>
+      <p class="src">Sources: <a href='https://healthcaredesignmagazine.com/news/jupiter-medical-center-opens-new-patient-care-tower-in-florida/162770/'>Healthcare Design Magazine</a></p>
+    </div>
+
+    <div class="story threat">
+      <span class="tag t-red">FREESTANDING EMERGENCY — MIAMI-DADE</span>
+      <h4>HCA Florida proposes additional freestanding emergency departments in South Florida, following University Hospital Pembroke Pines opening</h4>
+      <p>HCA Florida has opened a new emergency care center at its University Hospital in Pembroke Pines and has separately filed proposals for additional freestanding emergency departments in South Florida, as reported by South Florida Business Journal. The aggressive emergency access expansion mirrors HCA's national strategy of ringing markets with outpatient emergency capacity to capture patients before they can choose a competitor. HCA's freestanding emergency department pipeline is in addition to its MD Now urgent care network, which operates across South Florida. Combined, these access points create a comprehensive low-acuity to emergency capture system.</p>
+      <div class="mi"><div class="mi-label">Marketing Impact</div><p><strong>HCA is building an access moat around our markets.</strong> Every freestanding emergency department HCA opens is a patient relationship that starts outside the Baptist Health network. Our own five off-campus emergency departments are a competitive asset — but they need to be marketed aggressively, especially in ZIP codes where HCA is placing new facilities. Emergency care is increasingly a patient acquisition funnel for inpatient care, surgical cases, and specialist relationships. Make sure every BH emergency access point has a full digital presence and active local awareness.</p></div>
+      <div class="dots-row"><span class="dots-label">BH Impact</span><div class="dots"><span class="d on"></span><span class="d on"></span><span class="d on"></span><span class="d on"></span><span class="d"></span></div></div>
+      <p class="src">Sources: <a href='https://finance.yahoo.com/news/hca-florida-expansion-adds-emergency-042742736.html'>Yahoo Finance / HCA Florida</a>, <a href='https://www.bizjournals.com/southflorida/news/2026/02/27/hca-proposes-free-standing-ed.html'>South Florida Business Journal</a></p>
+    </div>
+
+    <div class="metrics"><div class="mc "><div class="num" style="font-size:17px;">Baptist Health South Florida</div><div class="desc">5 active off-campus emergency departments: Country Walk (Miami-Dade), Coral Way West (Miami-Dade), Palmetto Bay (Miami-Dade), Miami Lakes (Miami-Dade), West Boca (Palm Beach)</div></div>
+      <div class="mc "><div class="num" style="font-size:17px;">HCA Florida</div><div class="desc">Freestanding emergency department opened at University Hospital Pembroke Pines (Broward); 2 additional freestanding emergency departments proposed in South Florida per SFBJ reporting</div></div>
+      <div class="mc "><div class="num" style="font-size:17px;">Mount Sinai Medical Center</div><div class="desc">Westchester Emergency Center under construction in Miami-Dade; structural topping-out milestone reached February 2026</div></div></div>
+
+    
+    <h3>Steward Watch</h3>
+    <table>
+      <thead><tr><th>Hospital</th><th>Location</th><th>County</th></tr></thead>
+      <tbody><tr><td><strong>Coral Gables Hospital</strong></td><td>Coral Gables</td><td>Miami-Dade</td></tr>
+        <tr><td><strong>Florida Medical Center</strong></td><td>Lauderdale Lakes</td><td>Broward</td></tr>
+        <tr><td><strong>North Shore Medical Center</strong></td><td>Miami</td><td>Miami-Dade</td></tr>
+        <tr><td><strong>Palmetto General Hospital</strong></td><td>Hialeah</td><td>Miami-Dade</td></tr>
+        <tr><td><strong>St. Anthony's Hospital (not in PSA)</strong></td><td>St. Petersburg</td><td>Pinellas</td></tr></tbody>
+    </table>
+    
+    
+  </div>
+
+  <div class="sep"></div>
+
+  <!-- S3: AI & MARKETING TECH -->
+  <div class="section" id="s3">
+    <div class="sec-head"><div class="sec-num">3</div><span class="sec-tag">AI &amp; Marketing Technology</span></div>
+    <h2>The technology race that will reshape how patients find care — and how we market it.</h2>
+    
+    <div class="story watch">
+      <span class="tag t-yellow">HEALTHCARE AI — NATIONAL</span>
+      <h4>OpenAI, Amazon, Microsoft, and Epic all launched major clinical and consumer health AI products this quarter — and HCA is already live on ChatGPT for Healthcare</h4>
+      <p>The healthcare AI market moved faster in the first quarter of 2026 than in all of 2024 combined. <strong>OpenAI launched ChatGPT Health</strong> on January 7 — a consumer-facing, encrypted health guidance tool where users connect their medical records — and followed immediately with <strong>ChatGPT for Healthcare</strong>, an enterprise platform running on GPT-5. Early hospital adopters include <strong>HCA Healthcare</strong>, Cedars-Sinai, Stanford Medicine Children's Health, and AdventHealth. <strong>Amazon launched Health AI for One Medical members</strong> on January 22, which books appointments, manages prescriptions, and routes patients to providers through in-app messaging or video visits — then expanded it to all U.S. Amazon customers on March 10. <strong>Microsoft launched Copilot Health</strong> on March 12, connecting users' electronic health records with wearable data. <strong>Epic unveiled Agent Factory</strong> at the Healthcare Information and Management Systems Society conference — a no-code platform letting health systems build their own AI agents — and reported that more than 85% of its customers now use Epic artificial intelligence. More than 40 million Americans already ask ChatGPT health questions daily, according to OpenAI.</p>
+      <div class="mi"><div class="mi-label">Marketing Impact</div><p><strong>HCA is already using ChatGPT for Healthcare. Are we?</strong> When a patient in Kendall asks ChatGPT which hospital to go to for cardiac surgery, that AI tool's answer is shaped by the data it has been trained on and the health system partnerships it has forged. HCA is already in that room. If Baptist Health is not actively exploring enterprise health AI partnerships and investing in our digital content so that AI tools surface us accurately and favorably, we are ceding patient acquisition to systems that move faster. This is not a 2027 priority — it is a 2026 conversation for leadership.</p></div>
+      <div class="dots-row"><span class="dots-label">BH Impact</span><div class="dots"><span class="d on"></span><span class="d on"></span><span class="d on"></span><span class="d on"></span><span class="d on"></span></div></div>
+      <p class="src">Sources: <a href='https://www.beckershospitalreview.com/healthcare-information-technology/innovation/healthcare-ai-market-heats-up/'>Becker's Hospital Review</a></p>
+    </div>
+
+    <div class="story opp">
+      <span class="tag t-blue">MARKETING AI — ACTIONABLE</span>
+      <h4>Epic's Agent Factory and ambient AI documentation tools are live — health systems that use them gain a measurable patient experience and retention advantage</h4>
+      <p>Epic has released three named artificial intelligence agents now available to Epic customer health systems: <strong>Art</strong>, which documents patient visits and generates discharge summaries in real time; <strong>Penny</strong>, which handles prior authorization and revenue cycle coding; and <strong>Emmie</strong>, a patient-facing assistant for scheduling, lab result explanations, and general health questions. The Agent Factory platform lets health systems deploy their own custom agents without writing code. Advocate Health in Charlotte is already using it. Additionally, Epic's <strong>artificial intelligence charting tool</strong>, which listens during patient visits and drafts clinician notes automatically, launched February 4. These tools reduce physician administrative burden, improve throughput, and free clinicians to spend more time with patients — directly affecting patient experience scores that drive online reputation and word-of-mouth referrals.</p>
+      <div class="mi"><div class="mi-label">Marketing Impact</div><p><strong>If Baptist Health is on Epic, we should be piloting these tools now.</strong> The physician documentation burden is one of the top drivers of clinician dissatisfaction and rushed patient visits — both of which translate directly to lower patient experience ratings and weaker referral networks. An ambient documentation pilot across one service line (cardiology or orthopedics, high-volume and high-value) would let us quantify the impact and generate a compelling physician recruitment story. 'Baptist Health doctors spend more time with patients because AI handles the paperwork' is a positioning line that resonates with both patients and the physicians we are trying to recruit.</p></div>
+      <div class="dots-row"><span class="dots-label">BH Impact</span><div class="dots"><span class="d on"></span><span class="d on"></span><span class="d on"></span><span class="d on"></span><span class="d"></span></div></div>
+      <p class="src">Sources: <a href='https://www.beckershospitalreview.com/healthcare-information-technology/innovation/healthcare-ai-market-heats-up/'>Becker's Hospital Review</a></p>
+    </div>
+
+    <div class="story opp">
+      <span class="tag t-blue">AI MARKETING TOOLS — ACTIONABLE</span>
+      <h4>AI-powered patient acquisition tools are now clinic-grade — not just enterprise-grade — narrowing the technology gap between systems and independent competitors</h4>
+      <p>The 2026 healthcare marketing technology landscape has fractured in a way that benefits large health systems willing to move fast. AI-powered tools for personalized patient outreach, appointment conversion, and search-engine-optimized content generation are now widely available and have moved from experimental to operational. Health systems using AI-driven search engine marketing and content personalization are reporting <strong>measurable lifts in appointment conversion rates</strong> and reduced cost-per-acquisition. At the same time, independent practices and urgent care chains are adopting the same tools, narrowing the technology advantage that enterprise marketing teams once held. The differentiation is no longer access to the technology — it is the quality of the strategy behind it.</p>
+      <div class="mi"><div class="mi-label">Marketing Impact</div><p><strong>Our technology advantage is eroding — strategy is the new moat.</strong> The marketing team should audit which AI-powered tools we are actively using for patient acquisition, content optimization, and campaign personalization. If the answer is fewer than three, we are behind. The question for leadership is not whether to invest in AI marketing tools — it is which ones, with which data assets, aimed at which patient populations. A quarterly AI marketing capability review should be standing agenda for the digital team.</p></div>
+      <div class="dots-row"><span class="dots-label">BH Impact</span><div class="dots"><span class="d on"></span><span class="d on"></span><span class="d on"></span><span class="d"></span><span class="d"></span></div></div>
+      <p class="src">Sources: <a href='https://medicalsuite.ai/ai-marketing-tools-for-healthcare-clinics-in-2026/'>MedicalSuite AI</a>, <a href='https://www.linkedin.com/pulse/2026-healthcare-marketing-predictions-systems-what-leaders-gandolf-00ucc'>LinkedIn Healthcare Marketing Predictions 2026</a></p>
+    </div>
+    <div class="callout"><div class="cl">The Bottom Line on AI</div><p><strong>The bottom line for our marketing team:</strong> Artificial intelligence is no longer a back-office efficiency play — it is the new front door of patient acquisition. When 40 million Americans ask an AI tool a health question every day, and that AI tool is partnered with HCA Healthcare but not yet with Baptist Health, we have a distribution problem disguised as a technology story. The 2026 priority is ensuring Baptist Health is present, accurate, and favorably represented wherever patients are searching — including inside AI-powered health tools.</p></div>
+  </div>
+
+  <!-- S4: PERMITS -->
+  <div class="section alt" id="s4">
+    <div class="sec-head"><div class="sec-num">4</div><span class="sec-tag">Permit &amp; Construction Tracker</span></div>
+    <h2>Active construction projects and facility filings across our Primary Service Area — what is new, what changed, and what it means.</h2>
+    <p class="sec-intro">Active healthcare construction, Florida Agency for Health Care Administration filings, and facility approvals across the Primary Service Area.</p>
+    <table>
+      <thead><tr><th>Project</th><th>System</th><th>County</th><th>Value</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td><strong><a href="https://baptisthealth.net/baptist-health-news/building-for-the-future-baptist-health-breaks-ground-on-new-hospital-in-sunrise" style="color:inherit;text-decoration:none;border-bottom:1px dotted var(--medium-gray);">Baptist Health Sunrise Hospital</a></strong></td><td>Baptist Health South Florida</td><td>Broward</td><td>$500M</td><td>Under Construction <span class="bdg bdg-g">NEW</span></td></tr>
+        <tr><td><strong><a href="https://www.miamiherald.com/news/local/community/broward/article314550097.html" style="color:inherit;text-decoration:none;border-bottom:1px dotted var(--medium-gray);">Boca Regional Hospital Proton Therapy Center Addition</a></strong></td><td>Baptist Health South Florida</td><td>Palm Beach</td><td>TBD</td><td>Approved <span class="bdg bdg-g">NEW</span></td></tr>
+        <tr><td><strong><a href="https://www.miamiherald.com/news/local/community/broward/article314550097.html" style="color:inherit;text-decoration:none;border-bottom:1px dotted var(--medium-gray);">Baptist Health Wellington Outpatient Services Expansion</a></strong></td><td>Baptist Health South Florida</td><td>Palm Beach</td><td>TBD</td><td>Approved <span class="bdg bdg-g">NEW</span></td></tr>
+        <tr><td><strong><a href="https://www.miamiherald.com/news/local/community/broward/article314550097.html" style="color:inherit;text-decoration:none;border-bottom:1px dotted var(--medium-gray);">Bethesda West Hospital Bed Expansion</a></strong></td><td>Baptist Health South Florida</td><td>Palm Beach</td><td>TBD</td><td>Approved <span class="bdg bdg-g">NEW</span></td></tr>
+        <tr><td><strong><a href="https://uhs.com/news/alan-b-miller-medical-center-celebrates-ribbon-cutting/" style="color:inherit;text-decoration:none;border-bottom:1px dotted var(--medium-gray);">Alan B. Miller Medical Center</a></strong></td><td>Universal Health Services</td><td>Palm Beach</td><td>$430M</td><td>Completed — Now Open <span class="bdg bdg-g">NEW</span></td></tr>
+        <tr><td><strong><a href="https://open.substack.com/pub/rachelbarksdale/p/florida-healthcare-expansion-2026" style="color:inherit;text-decoration:none;border-bottom:1px dotted var(--medium-gray);">Cleveland Clinic West Palm Beach 200-Bed Academic Medical Center</a></strong></td><td>Cleveland Clinic Florida</td><td>Palm Beach</td><td>$500M</td><td>Approved <span class="bdg bdg-g">NEW</span></td></tr>
+        <tr><td><strong><a href="https://newsroom.clevelandclinic.org/2026/02/22/cleveland-clinic-highlights-growth-and-strategic-momentum-in-palm-beach-county" style="color:inherit;text-decoration:none;border-bottom:1px dotted var(--medium-gray);">West Palm Beach Outpatient Center and Ambulatory Surgery Center at 15 CityPlace</a></strong></td><td>Cleveland Clinic Florida</td><td>Palm Beach</td><td>TBD</td><td>Under Construction (Opening Nov 2027) <span class="bdg bdg-g">NEW</span></td></tr>
+        <tr><td><strong><a href="https://floridayimby.com/2025/07/memorial-regional-hospital-moves-forward-with-670-million-expansion-in-hollywood.html" style="color:inherit;text-decoration:none;border-bottom:1px dotted var(--medium-gray);">Memorial Regional Hospital Surgical and Patient Bed Tower</a></strong></td><td>Memorial Healthcare System</td><td>Broward</td><td>$670M</td><td>Approved <span class="bdg bdg-g">NEW</span></td></tr>
+        <tr><td><strong><a href="https://southfloridahospitalnews.com/broward-health-breaks-ground-on-new-medical-office-building-at-broward-health-north/" style="color:inherit;text-decoration:none;border-bottom:1px dotted var(--medium-gray);">Medical Office Building at Broward Health North</a></strong></td><td>Broward Health</td><td>Broward</td><td>TBD</td><td>Under Construction <span class="bdg bdg-g">NEW</span></td></tr>
+        <tr><td><strong><a href="https://www.facebook.com/BrowardHealth/videos/expansion-across-broward-health-is-well-underwayour-recent-groundbreaking-at-bro/1996149071111624/" style="color:inherit;text-decoration:none;border-bottom:1px dotted var(--medium-gray);">Broward Health North Specialty and Outpatient Services Expansion</a></strong></td><td>Broward Health</td><td>Broward</td><td>TBD</td><td>Under Construction <span class="bdg bdg-g">NEW</span></td></tr>
+        <tr><td><strong><a href="https://www.msmc.com/wp-content/uploads/2026/02/Mount_Sinai_Medical_Center_reaches_topping_out_milestone_for_new_Westchester_Emergency_Center_-_Flor_2026-02-15T22-35-04.pdf" style="color:inherit;text-decoration:none;border-bottom:1px dotted var(--medium-gray);">Westchester Emergency Center</a></strong></td><td>Mount Sinai Medical Center</td><td>Miami-Dade</td><td>TBD</td><td>Under Construction (Topping-Out Complete) <span class="bdg bdg-g">NEW</span></td></tr>
+        <tr><td><strong><a href="https://www.facebook.com/JacksonHealth/videos/-the-future-of-care-is-taking-shapeconstruction-continues-on-the-emergency-room-/2730653257297773/" style="color:inherit;text-decoration:none;border-bottom:1px dotted var(--medium-gray);">Jackson Health System Emergency Room Expansion</a></strong></td><td>Jackson Health</td><td>Miami-Dade</td><td>$300M</td><td>Completed — Now Open <span class="bdg bdg-g">NEW</span></td></tr>
+        <tr><td><strong><a href="https://healthcaredesignmagazine.com/news/jupiter-medical-center-opens-new-patient-care-tower-in-florida/162770/" style="color:inherit;text-decoration:none;border-bottom:1px dotted var(--medium-gray);">Tim and Jayne Donahue Patient Care Tower</a></strong></td><td>Jupiter Medical Center</td><td>Palm Beach</td><td>$110M</td><td>Completed — Now Open <span class="bdg bdg-g">NEW</span></td></tr>
+        <tr><td><strong><a href="https://southfloridahospitalnews.com/palms-west-hospital-breaks-ground-on-patient-tower-2/" style="color:inherit;text-decoration:none;border-bottom:1px dotted var(--medium-gray);">Palms West Hospital Patient Tower</a></strong></td><td>Palm Beach Health / Tenet</td><td>Palm Beach</td><td>TBD</td><td>Under Construction <span class="bdg bdg-g">NEW</span></td></tr>
+        <tr><td><strong><a href="https://www.beckershospitalreview.com/capital/tenet-florida-hospital-plans-revamped-campus/" style="color:inherit;text-decoration:none;border-bottom:1px dotted var(--medium-gray);">Good Samaritan Medical Center Campus Revitalization</a></strong></td><td>Palm Beach Health / Tenet</td><td>Palm Beach</td><td>TBD</td><td>Approved <span class="bdg bdg-g">NEW</span></td></tr>
+        <tr><td><strong><a href="https://www.bizjournals.com/southflorida/news/2026/04/29/hca-florida-kendall-hospital-plans-expansion.html" style="color:inherit;text-decoration:none;border-bottom:1px dotted var(--medium-gray);">HCA Florida Kendall Hospital Multi-Building Expansion (210 Beds + Medical Office Building)</a></strong></td><td>HCA Florida</td><td>Miami-Dade</td><td>TBD</td><td>Application Filed <span class="bdg bdg-g">NEW</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- S5: M&A (dark) -->
+  <div class="section-dark" id="s5">
+    <div class="sec-head"><div class="sec-num">5</div><span class="sec-tag">Mergers &amp; Acquisitions Watch</span></div>
+    <h2>Deal activity, private equity acquisitions, and the physician practice consolidation wave hitting our market.</h2>
+    <p>Private equity firms acquired at least 21 outpatient medical practices nationally in January 2026 alone — cardiology and orthopedics lead the target list in Florida.</p>
+
+    
+
+    
+    <div class="story threat">
+      <span class="tag t-red">PRIVATE EQUITY — FLORIDA</span>
+      <h4>Private equity-backed cardiology roll-up is actively acquiring practices across Florida — referral leakage risk for Baptist Health is real</h4>
+      <p>A private equity-backed company is <strong>rapidly expanding in Florida through cardiology practice acquisitions</strong>, according to Florida Trend reporting. The cardiology specialty has become a primary private equity target nationally in 2026, with analysts at Becker's noting that cardiology and orthopedics are being prioritized because they are high-cost-of-care specialties 'primed for value-based care transformation.' Private equity firms acquired at least 21 outpatient medical practices nationally in January 2026 alone, according to tracking by the Private Equity Stakeholder Project. When private equity acquires an independent cardiology practice that previously referred hospital cases to Baptist Health, those referral patterns often shift toward the investor's preferred hospital partner — which may not be us.</p>
+      <div class="mi"><div class="mi-label">Marketing Impact</div><p><strong>Every cardiology practice acquired by private equity in our market is a potential referral relationship lost.</strong> The marketing team needs a physician engagement and loyalty program specifically targeting independent cardiologists in Miami-Dade, Broward, and Palm Beach County. Before a practice is acquired, our physician liaisons should be deepening the relationship. After acquisition, understanding where the new management is directing hospital referrals is a strategic intelligence priority. This is not a passive watch-and-see situation.</p></div>
+      <div class="dots-row"><span class="dots-label">BH Impact</span><div class="dots"><span class="d on"></span><span class="d on"></span><span class="d on"></span><span class="d on"></span><span class="d"></span></div></div>
+      <p class="src">Sources: <a href='https://www.facebook.com/floridatrend/posts/-a-company-backed-by-private-equity-is-rapidly-expanding-in-florida-acquiring-ca/1540027918129458/'>Florida Trend</a>, <a href='https://www.beckersasc.com/cardiology/cardiology-and-private-equity-in-2026-5-notes/'>Becker's Ambulatory Surgery Center Review</a>, <a href='https://pestakeholder.org/news/private-equity-health-care-acquisitions-january-2026/'>Private Equity Stakeholder Project</a></p>
+    </div>
+
+    <div class="story watch">
+      <span class="tag t-yellow">PRACTICE CONSOLIDATION — NATIONAL</span>
+      <h4>Independent physician practices are consolidating at an accelerating pace — five major deals in 2026 signal an industry inflection point</h4>
+      <p>Five major physician practice deals completed in early 2026 reveal what analysts are calling an industry inflection point: independent practices are becoming increasingly difficult to sustain as reimbursement pressures, administrative burden, and technology investment requirements mount. The buyers are a mix of private equity platforms, hospital systems, and physician management organizations. The Commonwealth Fund notes in a April 2026 analysis that private equity acquisition of physician practices is 'picking up, affecting nearly all medical specialties.' For Baptist Health, physician consolidation is a two-sided dynamic: when we employ or align physicians, we gain referral loyalty; when private equity or a competitor employs them, we risk losing it.</p>
+      <div class="mi"><div class="mi-label">Marketing Impact</div><p><strong>Physician alignment is a marketing asset, not just a clinical strategy.</strong> Every physician who is employed by or formally aligned with Baptist Health is an ambassador and a referral node. The marketing team should be working hand-in-glove with physician relations to identify practices in our market that are contemplating consolidation — and ensuring BH is their first conversation, not their last resort. A co-branded physician partnership program (marketing support, patient acquisition tools, brand association) could be a differentiated offer versus private equity's purely financial pitch.</p></div>
+      <div class="dots-row"><span class="dots-label">BH Impact</span><div class="dots"><span class="d on"></span><span class="d on"></span><span class="d on"></span><span class="d"></span><span class="d"></span></div></div>
+      <p class="src">Sources: <a href='https://www.beckersasc.com/asc-transactions-and-valuation-issues/whos-snapping-up-physician-practices-in-2026/'>Becker's Ambulatory Surgery Center Review</a>, <a href='https://www.commonwealthfund.org/publications/2026/apr/private-equity-friend-or-foe-physicians-devil-is-in-details'>Commonwealth Fund</a></p>
+    </div>
+
+    <div class="story watch">
+      <span class="tag t-yellow">ACQUISITION — MIAMI-DADE</span>
+      <h4>Miami-Dade hospital sold to nursing home operators — signals continued churn in safety-net and small hospital market</h4>
+      <p>A Miami-Dade hospital was sold to nursing home operators in a transaction reported by the South Florida Business Journal in April 2026. While the specific facility and purchase price were behind a paywall, the transaction type — a hospital converting to or merging with post-acute care ownership — reflects a continuing pattern of smaller Miami-Dade hospitals navigating financial pressure by selling to operators with different care models. These transactions matter to Baptist Health because they can shift patient flow patterns in neighborhoods where we compete and occasionally create openings for BH to capture patients whose previous community hospital has changed ownership or mission.</p>
+      <div class="mi"><div class="mi-label">Marketing Impact</div><p><strong>Monitor hospital ownership changes in Miami-Dade for patient acquisition windows.</strong> When a community hospital changes hands — especially to non-hospital operators — patient confusion is high and loyalty is lowest. That is a moment when BH's brand stability and quality reputation are most differentiated. Have a rapid-response awareness campaign ready to activate in affected ZIP codes within 30 days of any such transaction closing in our market.</p></div>
+      <div class="dots-row"><span class="dots-label">BH Impact</span><div class="dots"><span class="d on"></span><span class="d on"></span><span class="d"></span><span class="d"></span><span class="d"></span></div></div>
+      <p class="src">Sources: <a href='https://www.bizjournals.com/southflorida/news/2026/04/09/miami-dade-hospital-sold-to-nursing-home-operators.html'>South Florida Business Journal</a></p>
+    </div>
+
+    <div class="callout"><div class="cl">The Private Equity Signal for Marketing</div><p><strong>The physician consolidation trend is accelerating in Florida.</strong> Private equity is targeting cardiology and orthopedics — two of Baptist Health's most strategically important referral specialties. The marketing team's response should be proactive physician engagement, not reactive observation. A physician who feels connected to the Baptist Health brand, supported by our marketing infrastructure, and valued as a partner is far less likely to sell to a private equity firm that will redirect referrals.</p></div>
+  </div>
+
+  <!-- S6: POLICY -->
+  <div class="section" id="s6">
+    <div class="sec-head"><div class="sec-num">6</div><span class="sec-tag">Policy &amp; Macro</span></div>
+    <h2>Federal and state policy shifts that will reshape our patient population and payer mix.</h2>
+    <div class="metrics"><div class="mc red""><div class="num">$911B</div><div class="desc">Estimated reduction in federal Medicaid spending over 10 years under the 2025 reconciliation law (KFF)</div></div>
+      <div class="mc yellow""><div class="num">80 hrs/mo</div><div class="desc">Work requirement threshold proposed under federal reconciliation — Medicaid adults ages 19 to 64 in expansion states must document qualifying activity monthly</div></div>
+      <div class="mc green""><div class="num">$2,100</div><div class="desc">New annual out-of-pocket cap on Medicare Part D prescription drugs starting in 2026 — meaningful relief for Florida's Medicare population</div></div>
+      <div class="mc red""><div class="num">5.2M</div><div class="desc">Estimated Americans nationally who could lose Medicaid coverage under work requirement provisions — Florida's large Medicaid-adjacent population is disproportionately exposed</div></div></div>
+    
+    <div class="story threat">
+      <span class="tag t-red">POLICY — FEDERAL</span>
+      <h4>The 'One Big Beautiful Bill' reconciliation package advances Medicaid work requirements — Florida's uninsured population could grow materially</h4>
+      <p>The federal reconciliation legislation advancing through Congress includes <strong>Medicaid work requirements</strong> mandating that adults ages 19 to 64 enrolled in Medicaid expansion demonstrate 80 hours per month of qualifying activity — paid work, job training, or community service — or lose coverage. The KFF projects the 2025 reconciliation law will reduce federal Medicaid spending by an estimated <strong>$911 billion over 10 years</strong>, creating fiscal pressure on state Medicaid programs that will cascade into hospital reimbursement rates. Florida has not expanded Medicaid, but the retroactive coverage change (from 90 days to 30 or 60 days) would affect existing Florida Medicaid enrollees. Florida health justice advocates have published analysis warning that work requirements in other states failed to improve employment while increasing uninsured rates — and critics warn Florida could see similar outcomes. Florida's baseline uninsured rate is already among the highest in the nation.</p>
+      <div class="mi"><div class="mi-label">Marketing Impact</div><p><strong>More uninsured patients in South Florida means increased pressure on our uncompensated care load and payer mix.</strong> Our marketing strategy must stay laser-focused on commercially insured 18 to 64 patient acquisition — because that population's profitability funds the community care mission. At the same time, policy volatility creates an opportunity for BH to deepen its community trust positioning: a health system that fights for coverage access and provides financial counseling and charity care communicates values that resonate with the communities we serve, and that resonance translates to brand preference when those patients do have coverage.</p></div>
+      <div class="dots-row"><span class="dots-label">BH Impact</span><div class="dots"><span class="d on"></span><span class="d on"></span><span class="d on"></span><span class="d on"></span><span class="d on"></span></div></div>
+      <p class="src">Sources: <a href='https://www.kff.org/medicaid/medicaid-what-to-watch-in-2026/'>Kaiser Family Foundation</a>, <a href='https://www.miamiherald.com/living/article315601147.html'>Miami Herald</a>, <a href='https://kffhealthnews.org/medicaid/florida-medicaid-work-requirements-expansion-one-big-beautiful-bill-act/'>KFF Health News</a></p>
+    </div>
+
+    <div class="story opp">
+      <span class="tag t-blue">POLICY — MEDICARE</span>
+      <h4>New $2,100 Medicare Part D out-of-pocket drug cap provides real financial relief to Florida's senior population</h4>
+      <p>Starting in 2026, Medicare Part D prescription drug coverage imposes a firm <strong>$2,100 annual out-of-pocket cap</strong> on covered prescription drugs. Once enrollees reach that threshold, their cost-sharing obligation ends for the year. For Florida — which has one of the nation's oldest and largest Medicare populations — this represents a meaningful improvement in medication affordability and adherence. Better drug adherence among senior patients translates to better management of chronic conditions, fewer emergency department visits, and higher patient satisfaction scores. Baptist Health's Medicare Advantage relationships and pharmacy services are positioned to benefit from this policy shift as it increases the relative value of comprehensive network care.</p>
+      <div class="mi"><div class="mi-label">Marketing Impact</div><p><strong>The Part D cap is a Medicare marketing moment.</strong> Florida seniors who previously rationed medications due to cost may now be more willing to engage with their full care plan — including specialist visits, preventive screenings, and chronic disease management programs that Baptist Health provides. A targeted Medicare patient communication campaign explaining the new drug benefit and connecting it to our comprehensive senior care services (concierge medicine, Baptist Health Quality Network) is a low-cost, high-relevance outreach opportunity this quarter.</p></div>
+      <div class="dots-row"><span class="dots-label">BH Impact</span><div class="dots"><span class="d on"></span><span class="d on"></span><span class="d on"></span><span class="d"></span><span class="d"></span></div></div>
+      <p class="src">Sources: <a href='https://steveturnerinsurancespecialist.com/2026-medicare-changes/'>2026 Medicare Changes Overview</a>, <a href='https://virtuallawoffice.com/how-2026-medicare-changes-in-florida-affect-your-healthcare-costs/'>Florida Medicare Cost Analysis</a></p>
+    </div>
+  </div>
+
+  <div class="sep"></div>
+
+  <!-- S7: INSIGHTS -->
+  <div class="section alt" id="s7">
+    <div class="sec-head"><div class="sec-num">7</div><span class="sec-tag">Insights to Think About</span></div>
+    <h2>Questions for the Marketing Leadership Team</h2>
+    <div class="insight"><div class="i-num">1</div><div><h4>Palm Beach is the most contested hospital market in Florida right now — and we are not yet the dominant brand there.</h4><p>In a single reporting cycle, we tracked Universal Health Services opening a brand-new hospital, Cleveland Clinic building two facilities simultaneously, Tenet Healthcare planning a complete campus rebuild, and Palms West breaking ground on a new tower. Our Bethesda network is our foundation in Palm Beach — but foundation is not the same as dominance. The question leadership should be asking: What is our brand awareness score among commercially insured 35 to 60 year olds in Palm Beach County, and how does it compare to Cleveland Clinic's? If we do not know the answer, we need to find out before 2027.</p></div></div>
+
+    <div class="insight"><div class="i-num">2</div><div><h4>HCA is already using ChatGPT for Healthcare. Every day we wait is a day they get smarter about our patients.</h4><p>HCA Healthcare is listed as an early adopter of OpenAI's enterprise health AI platform — a tool that integrates with patient records, learns from clinical workflows, and can influence how patients think about choosing care. That is not a distant future scenario. It is live today. Baptist Health should be in active conversations with at least one enterprise health AI vendor by the end of this quarter. The first question to answer: where are our patients already using AI to make healthcare decisions, and are we present in those moments?</p></div></div>
+
+    <div class="insight"><div class="i-num">3</div><div><h4>The freestanding emergency department arms race is creating a new patient acquisition funnel — and Mount Sinai just entered our Westchester backyard.</h4><p>Freestanding emergency departments are not just access points. They are the first clinical touch in a patient relationship that often leads to specialist referrals, imaging, and inpatient stays. Mount Sinai is building one in Westchester — a neighborhood where Baptist Health has existing off-campus emergency departments. Our Country Walk and Coral Way West locations need sustained local marketing investment, not just a presence on the map. When Mount Sinai opens in Westchester, patients will have a choice. Make sure they already know our name.</p></div></div>
+
+    <div class="insight"><div class="i-num">4</div><div><h4>Medicaid work requirements will push more South Floridians into the uninsured category — the commercially insured 18 to 64 market becomes even more strategically critical.</h4><p>If federal Medicaid cuts materialize as projected, Florida — which already has a high uninsured rate — will see further pressure on safety-net capacity. For Baptist Health's marketing strategy, the implication is straightforward: double down on commercially insured patient acquisition, employer contracting, and premium service positioning now, while the payer mix still supports it. The commercially insured patient is the most valuable and the most actively courted. We need to be their obvious first choice — not a fallback.</p></div></div>
+
+    <div class="insight"><div class="i-num">5</div><div><h4>Private equity is buying cardiologists in Florida. When they close, our referral map changes.</h4><p>Private equity-backed cardiology roll-ups are actively acquiring independent practices in Florida. Each acquisition is a referral relationship at risk. Our physician liaison program should have a real-time watchlist of independent cardiology and orthopedic practices in our Primary Service Area. When a practice signals it is exploring a sale, Baptist Health should already be in the room with a compelling physician alignment offer. This is a physician marketing problem as much as a clinical strategy problem — and marketing has a role in making BH the most attractive partner in that conversation.</p></div></div>
+
+    <div class="insight"><div class="i-num">6</div><div><h4>The Broward 2029 scenario: Baptist Health Sunrise and Memorial Regional's expansion open at the same time. Who wins?</h4><p>Two of the largest hospital investments in Broward County history — our Sunrise Hospital and Memorial Regional's $670 million surgical tower — are both targeting 2029 openings. Three years from now, Broward County will have two brand-new, state-of-the-art hospital facilities competing for the same commercially insured patient population. The winner will be the health system that has spent 2026, 2027, and 2028 building brand equity, physician relationships, and employer contracts in Broward. That campaign needs to start now — not in 2028 when both facilities are doing opening-day press.</p></div></div>
+
+    <div class="insight"><div class="i-num">7</div><div><h4>Jupiter Medical just opened a three-service-line specialty tower. Its marketing message will sound like ours.</h4><p>Jupiter Medical Center's new Donahue Tower leads with cardiovascular, orthopedic, and oncology care — three service lines that are also core to Baptist Health's specialty positioning. A community hospital with a new, modern facility and the same specialty story is a real competitor for the affluent northern Palm Beach patient who might otherwise choose Baptist Health's Bethesda network. We need a brand differentiation strategy for this specific scenario: What does Baptist Health offer that Jupiter Medical, even with its shiny new tower, cannot match? Network depth, subspecialty access, academic affiliation, and the breadth of our clinical programs are the answer — and that story needs to be told in Jupiter's ZIP codes.</p></div></div>
+  </div>
+
+  <!-- FOOTER -->
+  <div class="footer">
+    <div class="f-logo">INSIGHT MINER</div>
+    <div class="f-sub">Powered by the MarCom Market Research Agent &middot; Baptist Health South Florida</div>
+    <div class="f-badge">Generated by AI &mdash; Verified by Humans</div>
+  </div>
+
+</div>
+</body>
+</html>

@@ -2322,13 +2322,68 @@ app.get('/api/newsletter-status', (req, res) => {
   res.json(latestNewsletterResult);
 });
 
-// Serve generated newsletter HTML files
+// Get the latest newsletter — returns { status, filename, html, generated_at }
+// This is what n8n calls to get the newsletter content for emailing.
+app.get('/api/latest-newsletter', (req, res) => {
+  try {
+    const dataDir = path.join(__dirname, 'data');
+    const files = fs.readdirSync(dataDir)
+      .filter(f => f.startsWith('insight-miner-') && f.endsWith('.html'))
+      .sort()
+      .reverse();
+    if (files.length === 0) {
+      return res.json({ status: 'none', message: 'No newsletter has been generated yet.' });
+    }
+    const filename = files[0];
+    const html = fs.readFileSync(path.join(dataDir, filename), 'utf-8');
+    const stat = fs.statSync(path.join(dataDir, filename));
+    res.json({
+      status: 'ready',
+      filename,
+      html,
+      generated_at: stat.mtime.toISOString()
+    });
+  } catch (err) {
+    res.status(500).json({ status: 'error', message: err.message });
+  }
+});
+
+// Serve generated newsletter HTML files in browser
 app.get('/api/newsletter-file/:filename', (req, res) => {
   const filePath = path.join(__dirname, 'data', req.params.filename);
   if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File not found' });
   res.setHeader('Content-Type', 'text/html');
   res.sendFile(filePath);
 });
+
+// ── Built-in Newsletter Cron ────────────────────────────────────────────────
+// Generates newsletter every other Sunday at 10 PM ET.
+// The HTML is ready by Monday 9 AM when n8n emails it.
+(function startNewsletterCron() {
+  const GENERATION_HOUR = 22; // 10 PM
+  const GENERATION_DAY = 0;   // Sunday
+  const INTERVAL_WEEKS = 2;
+
+  let lastGenerationWeek = -1;
+
+  setInterval(() => {
+    const now = new Date();
+    const day = now.getDay();
+    const hour = now.getHours();
+    const weekNum = Math.floor(now.getTime() / (7 * 24 * 60 * 60 * 1000));
+    const isBiWeek = weekNum % INTERVAL_WEEKS === 0;
+
+    if (day === GENERATION_DAY && hour === GENERATION_HOUR && isBiWeek && lastGenerationWeek !== weekNum) {
+      lastGenerationWeek = weekNum;
+      console.log('\n[Cron] Triggering bi-weekly newsletter generation...');
+      // Simulate a POST to generate-newsletter
+      const http = require('http');
+      const req = http.request({ hostname: 'localhost', port: process.env.PORT || 5000, path: '/api/generate-newsletter', method: 'POST', headers: { 'Content-Type': 'application/json' } }, () => {});
+      req.write('{}');
+      req.end();
+    }
+  }, 60 * 60 * 1000); // Check every hour
+})();
 
 // ── API Endpoint ────────────────────────────────────────────────────────────
 
