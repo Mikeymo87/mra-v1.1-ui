@@ -1967,12 +1967,16 @@ async function runAgentLoop(sessionId, userMessage, res) {
       origin: runGeo.origin,
       bhLocations: bhFiltered,
       competitors: compFiltered,
-      isochrone: runGeo.isochrone,
+      isochrone: null, // sent separately to avoid large SSE payload
       catchmentZips: runGeo.catchmentZips || null,
       bhOutsideRadius: bhOutsideRadius.length > 0 ? bhOutsideRadius : null
     };
+    // Send pins first (small payload), then isochrone separately (large GeoJSON)
     sendSSE(res, 'map_data', mapData);
-    console.log(`[Map] Sent: ${bhFiltered.length} BH + ${compFiltered.length} competitors${runGeo.isochrone ? ' + isochrone' : ''}${bhOutsideRadius.length > 0 ? ` (${bhOutsideRadius.length} BH outside radius)` : ''}`);
+    if (runGeo.isochrone) {
+      sendSSE(res, 'map_isochrone', runGeo.isochrone);
+    }
+    console.log(`[Map] Sent: ${bhFiltered.length} BH + ${compFiltered.length} competitors${runGeo.isochrone ? ' + isochrone (separate event)' : ''}${bhOutsideRadius.length > 0 ? ` (${bhOutsideRadius.length} BH outside radius)` : ''}`);
 
     // If BH locations were filtered out, mention only the closest 3 (not a wall of 30 names)
     if (bhOutsideRadius.length > 0 && runGeo.origin) {

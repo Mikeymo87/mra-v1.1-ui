@@ -693,9 +693,14 @@
               }
             }
           } else if (eventType === 'map_data') {
-            // Store map data — render after text is done
-            console.log('[Map] Received map_data:', payload.bhLocations?.length, 'BH,', payload.competitors?.length, 'comp, iso:', !!payload.isochrone, 'center:', !!payload.center);
+            // Store map data (pins only) — render after text is done
+            console.log('[Map] Received map_data:', payload.bhLocations?.length, 'BH,', payload.competitors?.length, 'comp, center:', !!payload.center);
             pendingMapData = payload;
+          } else if (eventType === 'map_isochrone') {
+            // Isochrone sent separately (large GeoJSON)
+            console.log('[Map] Received isochrone:', payload.features?.length, 'features');
+            if (pendingMapData) pendingMapData.isochrone = payload;
+            else pendingMapData = { center: null, origin: null, bhLocations: [], competitors: [], isochrone: payload };
           } else if (eventType === 'map_command') {
             // Agent-triggered map control — queue if map not ready yet
             if (activeMap) { handleMapCommand(payload); }
