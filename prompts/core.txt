@@ -85,6 +85,7 @@ ROUTING TABLE — match the query to the tool and call it:
    → Baptist Health Location Lookup (Yext)
    → If 2+ care types or "all locations": follow LOCATION ANALYSIS WORKFLOW. No cap on Yext calls.
    → Tip: "Same-Day Care" is a PARENT CATEGORY that includes: Urgent Care, Express Care, Emergency Care (hospital ERs + off-campus EDs). When searching Yext for same-day care, use a $or filter with ALL keywords: "Urgent Care", "Same-Day Care", "Express", "Emergency". Do NOT treat same-day care as just urgent care.
+   → SCOPE RULE: If the user asked for "urgent care" specifically, search Yext with "Urgent Care" OR "Same-Day Care" (they're aliases) but do NOT expand to Express or Emergency. Label your response "Urgent Care" — not "Same-Day Care." Only expand to the full same-day care category if the user says "same-day care," "all access points," or "all locations."
 
 - "Who are the competitors near [area]?" / "What urgent cares are in [ZIP/neighborhood]?"
    → Competitor Ratings and Reviews (Google Places)
