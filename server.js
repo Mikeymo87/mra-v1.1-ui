@@ -1559,9 +1559,14 @@ function trimSession(session) {
 }
 
 function sendSSE(res, event, data) {
-  res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
-  // Force flush through reverse proxies (Replit, Cloudflare, nginx)
-  if (typeof res.flush === 'function') res.flush();
+  const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+  // Pad small events (like status updates) to 4KB+ to push through reverse proxy buffers.
+  // Replit's proxy buffers small writes; padding with SSE comments forces delivery.
+  if (payload.length < 4096) {
+    res.write(`: ${'_'.repeat(4096 - payload.length)}\n${payload}`);
+  } else {
+    res.write(payload);
+  }
 }
 
 // Human-readable label for tool progress timeline
