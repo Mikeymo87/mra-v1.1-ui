@@ -12888,7 +12888,7 @@
       "accountId": "7671447102894087885",
       "uid": "2061465552",
       "id": "3850220933830747850",
-      "timestamp": "2026-05-05T17:53:28",
+      "timestamp": "2026-05-08T18:16:01",
       "createdTimestamp": "2026-05-04T14:32:06",
       "folderId": "0",
       "language": "en",
@@ -12915,6 +12915,31 @@
       "id": "7054679245448287233",
       "timestamp": "2026-05-05T19:08:29",
       "createdTimestamp": "2026-05-04T22:32:30",
+      "folderId": "0",
+      "language": "en",
+      "countryCode": "US",
+      "entityType": "healthcareFacility"
+    }
+  },
+  {
+    "address": {
+      "line1": "6262 Sunset Drive",
+      "city": "South Miami",
+      "region": "FL",
+      "postalCode": "33143",
+      "countryCode": "US"
+    },
+    "name": "Baptist Health Concierge Medicine | South Miami - Virtual Care",
+    "geocodedCoordinate": {
+      "latitude": 25.7038897,
+      "longitude": -80.2946838
+    },
+    "meta": {
+      "accountId": "7671447102894087885",
+      "uid": "2062151824",
+      "id": "6857760242192581466",
+      "timestamp": "2026-05-08T18:18:43",
+      "createdTimestamp": "2026-05-08T18:16:29",
       "folderId": "0",
       "language": "en",
       "countryCode": "US",
