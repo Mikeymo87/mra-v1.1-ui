@@ -879,7 +879,8 @@ function envelope(api, url, timestamp, data, opts = {}) {
     query: opts.query || null,
     data_year: opts.data_year || null,
     filtering: opts.filtering || null,
-    data: truncateResult(data)
+    data: truncateResult(data),
+    _rawData: data  // Preserve original for geo accumulation (not sent to model)
   };
 }
 
@@ -1602,7 +1603,7 @@ function humanizeToolCall(toolName, input) {
 // Accumulate geo data from tool results for map rendering
 function accumulateGeoData(geo, toolName, result, session) {
   try {
-    const data = result.data;
+    const data = result._rawData || result.data;  // Use raw (pre-truncation) data for geo
     if (toolName === 'geocode_address' && Array.isArray(data) && data[0]?.geometry?.location) {
       const loc = data[0].geometry.location;
       geo.origin = { lat: loc.lat, lng: loc.lng, label: data[0].formatted_address || 'Origin' };
@@ -1612,6 +1613,9 @@ function accumulateGeoData(geo, toolName, result, session) {
     }
     if (toolName === 'resolve_bh_facility' && data?.lat) {
       geo.origin = { lat: data.lat, lng: data.lng, label: data.name || 'BH Facility' };
+    }
+    if (toolName === 'baptist_health_location_lookup') {
+      console.log(`[GeoAccum] BH lookup: data type=${typeof data}, isArray=${Array.isArray(data)}, length=${Array.isArray(data) ? data.length : 'N/A'}, sample keys=${data ? Object.keys(Array.isArray(data) ? (data[0] || {}) : data).join(',') : 'null'}`);
     }
     if (toolName === 'baptist_health_location_lookup' && Array.isArray(data)) {
       for (const e of data) {
@@ -1656,7 +1660,7 @@ function accumulateGeoData(geo, toolName, result, session) {
         geo.catchmentZips = catchmentZips;
       }
     }
-  } catch (e) { /* non-critical — skip if parsing fails */ }
+  } catch (e) { console.error(`[GeoAccum] ERROR in ${toolName}:`, e.message); }
 }
 
 async function runAgentLoop(sessionId, userMessage, res) {
@@ -1707,6 +1711,7 @@ async function runAgentLoop(sessionId, userMessage, res) {
     // Accumulate token counts
     totalInputTokens += response.usage?.input_tokens || 0;
     totalOutputTokens += response.usage?.output_tokens || 0;
+    console.log(`[Agent] Iteration ${iterations}: stop_reason=${response.stop_reason}, input=${response.usage?.input_tokens}, output=${response.usage?.output_tokens}`);
 
     const assistantContent = response.content;
     let textParts = [];
@@ -1722,6 +1727,14 @@ async function runAgentLoop(sessionId, userMessage, res) {
     }
 
     session.messages.push({ role: 'assistant', content: assistantContent });
+
+    // Handle max_tokens truncation — the model ran out of output space.
+    // Ask it to continue instead of silently dropping the analysis.
+    if (response.stop_reason === 'max_tokens' && toolCalls.length === 0) {
+      console.warn(`[Agent] Hit max_tokens (8192) on iteration ${iterations}. Requesting continuation...`);
+      session.messages.push({ role: 'user', content: 'Your response was cut off. Please continue where you left off — deliver the analysis with tables and data.' });
+      continue;
+    }
 
     if (response.stop_reason === 'end_of_turn' || toolCalls.length === 0) {
       fullText = textParts.join('');
@@ -1746,7 +1759,9 @@ async function runAgentLoop(sessionId, userMessage, res) {
       const t0 = Date.now();
       const result = await executeTool(toolCall.name, toolCall.input);
       const duration = Date.now() - t0;
-      const fullContent = JSON.stringify(result);
+      // Strip _rawData before sending to model (it's only for geo accumulation)
+      const { _rawData, ...resultForModel } = result;
+      const fullContent = JSON.stringify(resultForModel);
 
       // Send structured progress: done
       sendSSE(res, 'status', {
@@ -1785,11 +1800,6 @@ async function runAgentLoop(sessionId, userMessage, res) {
     totalSteps += toolCalls.length;
 
     session.messages.push({ role: 'user', content: toolResults });
-
-    if (iterations > 0) {
-      session._pendingCompression = session._pendingCompression || [];
-      session._pendingCompression.push({ index: session.messages.length - 1, compressed: toolSummaries });
-    }
   }
 
   if (iterations >= MAX_ITERATIONS) {
@@ -1823,7 +1833,8 @@ async function runAgentLoop(sessionId, userMessage, res) {
   if (runGeo.bhLocations.length === 0 && bhFacilityCache.length > 0 && runGeo.origin) {
     const mentionsBH = /\b(bh|baptist\s*health|our\s+(location|facilit|urgent|hospital|imaging|primary|emergency|express))/i.test(userMessage);
     const mentionsServiceLine = /\b(urgent\s*care|hospital|imaging|primary\s*care|emergency|express|same.?day|radiol|mri|ct\b|cardio|ortho|neuro|spine|cancer|oncol|surg|endoscop|infusion|pharmac|sleep|urol|gastro|women|rehab|physical\s*therap)/i.test(userMessage);
-    if (mentionsBH || mentionsServiceLine) {
+    const isMarketBrief = /\b(market\s*brief|market\s*profile|competitive\s*landscape|trade\s*area)/i.test(userMessage);
+    if (mentionsBH || mentionsServiceLine || isMarketBrief) {
       // Pull matching BH facilities from cache — filter by service type if specific, otherwise pull all nearby
       const serviceMatch = userMessage.match(/\b(urgent\s*care|hospital|imaging|primary\s*care|emergency|express|same.?day|radiol|cardio|ortho|neuro|spine|cancer|surg|endoscop|infusion|pharmac|sleep|urol|gastro|women|rehab|physical\s*therap)\b/i);
       const keyword = serviceMatch ? serviceMatch[1].toLowerCase() : null;
@@ -1962,17 +1973,23 @@ async function runAgentLoop(sessionId, userMessage, res) {
     console.log(`[Choropleth] Sent: ${Object.keys(runGeo.choropleth.zipData).length} ZIPs, metric=${runGeo.choropleth.metric}`);
   }
 
-  // Compress tool results in session history
-  if (session._pendingCompression) {
-    const count = session._pendingCompression.length;
-    for (const { index, compressed } of session._pendingCompression) {
-      if (session.messages[index] && session.messages[index].role === 'user') {
-        session.messages[index].content = compressed;
-      }
+  // Compress ALL tool results in session history for future queries.
+  // Full data was used during this query — only summaries needed for follow-ups.
+  let compCount = 0;
+  for (let mi = 0; mi < session.messages.length; mi++) {
+    const msg = session.messages[mi];
+    if (msg.role === 'user' && Array.isArray(msg.content) && msg.content[0]?.type === 'tool_result') {
+      const before = JSON.stringify(msg.content).length;
+      msg.content = msg.content.map(tr => ({
+        ...tr,
+        content: typeof tr.content === 'string' && tr.content.length > 2000
+          ? compressToolResult('session', tr.content)
+          : tr.content
+      }));
+      compCount++;
     }
-    delete session._pendingCompression;
-    console.log(`[Session] Compressed ${count} tool result set(s) in session history`);
   }
+  if (compCount > 0) console.log(`[Session] Compressed ${compCount} tool result set(s) for future queries`);
 
   trimSession(session);
 
