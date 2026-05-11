@@ -1560,6 +1560,8 @@ function trimSession(session) {
 
 function sendSSE(res, event, data) {
   res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+  // Force flush through reverse proxies (Replit, Cloudflare, nginx)
+  if (typeof res.flush === 'function') res.flush();
 }
 
 // Human-readable label for tool progress timeline
@@ -2412,8 +2414,18 @@ app.post('/api/chat', async (req, res) => {
   res.setHeader('X-Accel-Buffering', 'no');
   res.flushHeaders();
 
+  // Send 2KB padding to force reverse proxy (Replit) to start streaming immediately
+  // The ':' prefix makes this an SSE comment — ignored by the client parser
+  res.write(`:${' '.repeat(2048)}\n\n`);
+
   req.setTimeout(0);
   res.setTimeout(0);
+
+  // Heartbeat keeps the connection alive through proxy timeouts during long tool executions
+  const heartbeat = setInterval(() => {
+    res.write(': heartbeat\n\n');
+    if (typeof res.flush === 'function') res.flush();
+  }, 15000);
 
   try {
     const fullText = await runAgentLoop(sessionId, query, res);
@@ -2422,6 +2434,7 @@ app.post('/api/chat', async (req, res) => {
     console.error('[Chat] Error:', err);
     sendSSE(res, 'error', { message: err.message || 'Something went wrong' });
   } finally {
+    clearInterval(heartbeat);
     res.end();
   }
 });
