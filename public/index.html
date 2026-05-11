@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>BH Market Research Agent</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.9.4/mapbox-gl.css" rel="stylesheet">
   <script src="https://api.mapbox.com/mapbox-gl-js/v3.9.4/mapbox-gl.js"></script>
@@ -11,20 +12,34 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --green: #2EA84A;
-      --green-dark: #237a37;
-      --black: #25282A;
-      --mint: #f0faf3;
-      --border: #e2e8e4;
-      --text: #1a1a1a;
-      --muted: #6b7280;
-      --bubble-agent: #ffffff;
-      --bubble-user: #2EA84A;
+      --green: #159947;
+      --green-dark: #08783a;
+      --green-soft: #eef9f2;
+      --black: #111827;
+      --mint: #f8faf9;
+      --border: #e4e8e6;
+      --border-strong: #d5dfda;
+      --text: #111827;
+      --muted: #667085;
+      --bubble-agent: rgba(255,255,255,0.96);
+      --bubble-user: #f1faf4;
+      --chrome: #111820;
+      --chrome-2: #19222b;
+      /* Threat badges */
+      --threat-high-bg: #ffeded;
+      --threat-high-text: #b42318;
+      --threat-med-bg: #fff5dc;
+      --threat-med-text: #9a5b00;
+      --threat-low-bg: #eaf8ef;
+      --threat-low-text: #137333;
     }
 
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      background: var(--mint);
+      font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background:
+        radial-gradient(circle at 18% -10%, rgba(21, 153, 71, 0.08), transparent 28%),
+        radial-gradient(circle at 86% 2%, rgba(21, 153, 71, 0.06), transparent 24%),
+        linear-gradient(180deg, #f7f8f7 0%, #ffffff 42%, #f4f6f5 100%);
       color: var(--text);
       height: 100dvh;
       display: flex;
@@ -33,28 +48,35 @@
 
     /* ── Header ── */
     header {
-      background: var(--black);
+      background: linear-gradient(180deg, var(--chrome) 0%, var(--chrome-2) 100%);
       color: white;
-      padding: 14px 20px;
+      padding: 0 28px;
+      height: 62px;
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 14px;
       flex-shrink: 0;
-      border-bottom: 3px solid var(--green);
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      box-shadow: 0 8px 24px rgba(16,24,40,0.18);
+      position: sticky; top: 0; z-index: 30;
     }
 
     .bh-badge {
-      background: var(--green);
-      color: white;
-      font-weight: 800;
-      font-size: 13px;
-      padding: 3px 8px;
-      border-radius: 4px;
-      letter-spacing: 0.5px;
+      width: 40px; height: 40px;
+      display: grid; place-items: center;
+      background: transparent;
+      border: none;
+      border-radius: 10px;
+      overflow: hidden;
+      filter: drop-shadow(0 0 8px rgba(46,168,74,0.4)) drop-shadow(0 0 20px rgba(46,168,74,0.15));
+    }
+    .bh-badge img {
+      width: 100%; height: 100%;
+      border-radius: 10px;
     }
 
-    .header-title { font-size: 16px; font-weight: 600; }
-    .header-sub { font-size: 12px; color: #9ca3af; margin-left: 2px; }
+    .header-title { font-size: 17px; font-weight: 800; letter-spacing: -0.02em; }
+    .header-sub { font-size: 12px; color: #aab4be; margin-left: 2px; }
 
     .header-status {
       margin-left: auto;
@@ -93,36 +115,50 @@
     }
 
     .msg.user .msg-bubble {
-      background: var(--bubble-user); color: white; border-bottom-right-radius: 3px;
+      background: var(--bubble-user); color: #18231e; border: 1px solid #d8e9de;
+      border-bottom-right-radius: 3px; font-weight: 600;
+      box-shadow: 0 8px 24px rgba(16,24,40,0.06);
     }
 
     .msg.agent .msg-bubble {
       background: var(--bubble-agent); color: var(--text);
       border: 1px solid var(--border); border-bottom-left-radius: 3px;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+      box-shadow: 0 20px 60px rgba(16,24,40,0.10);
+      border-radius: 22px;
     }
 
     /* Markdown */
-    .msg-bubble h1, .msg-bubble h2, .msg-bubble h3 { margin: 18px 0 8px; color: var(--black); }
-    .msg-bubble h1 { font-size: 18px; border-bottom: 2px solid var(--green); padding-bottom: 6px; }
-    .msg-bubble h2 { font-size: 16px; }
-    .msg-bubble h3 { font-size: 14px; text-transform: uppercase; color: var(--green); letter-spacing: 0.3px; }
+    .msg-bubble h1, .msg-bubble h2, .msg-bubble h3 { margin: 20px 0 10px; color: var(--black); }
+    .msg-bubble h1 { font-size: 20px; font-weight: 850; letter-spacing: -0.03em; border-bottom: 2px solid var(--green); padding-bottom: 8px; line-height: 1.2; }
+    .msg-bubble h2 { font-size: 15px; font-weight: 800; }
+    .msg-bubble h3 { font-size: 13px; text-transform: uppercase; color: var(--green-dark); letter-spacing: 0.07em; font-weight: 900; }
     .msg-bubble p { margin: 8px 0; }
     .msg-bubble ul, .msg-bubble ol { padding-left: 20px; margin: 8px 0; }
     .msg-bubble li { margin: 4px 0; }
     .msg-bubble strong { color: var(--black); }
     .msg-bubble em { color: var(--muted); }
-    .msg-bubble table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 13px; }
-    .msg-bubble th {
-      background: var(--black); color: #7DE69B; border: 1px solid #333;
-      padding: 8px 12px; text-align: left; font-weight: 600;
-      font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px;
+    .msg-bubble table {
+      width: 100%; border-collapse: separate; border-spacing: 0;
+      margin: 14px 0; font-size: 12.5px; overflow: hidden;
+      border: 1px solid var(--border); border-radius: 13px;
+      box-shadow: 0 4px 14px rgba(16,24,40,0.03);
     }
-    .msg-bubble td { border: 1px solid var(--border); padding: 8px 12px; }
-    .msg-bubble tr:nth-child(even) td { background: #f9fafb; }
-    .msg-bubble tr:hover td { background: #edf7ef; }
+    .msg-bubble th {
+      background: #fafbfb; color: #26312c; border-bottom: 1px solid var(--border);
+      padding: 10px 13px; text-align: left; font-weight: 850;
+      font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+    }
+    .msg-bubble td { border-bottom: 1px solid #edf0ef; border-right: 1px solid #edf0ef; padding: 10px 13px; vertical-align: top; line-height: 1.35; }
+    .msg-bubble td:last-child, .msg-bubble th:last-child { border-right: 0; }
+    .msg-bubble tbody tr:last-child td { border-bottom: 0; }
+    .msg-bubble tr:nth-child(even) td { background: #fbfcfc; }
+    .msg-bubble tr:hover td { background: #f5faf7; }
     .msg-bubble code { background: #f3f4f6; padding: 1px 5px; border-radius: 3px; font-size: 12px; }
-    .msg-bubble blockquote { border-left: 3px solid var(--green); padding-left: 12px; color: var(--muted); margin: 10px 0; }
+    .msg-bubble blockquote {
+      border-left: none; border: 1px solid rgba(21,153,71,0.22); border-radius: 14px;
+      padding: 14px 18px; color: #27342f; margin: 14px 0; font-size: 13.5px; line-height: 1.55;
+      background: linear-gradient(180deg, #fbfefd, #f3faf6);
+    }
     .msg-bubble a { color: var(--green); }
     .msg-bubble hr { border: none; border-top: 1px solid var(--border); margin: 18px 0; }
 
@@ -132,14 +168,14 @@
       border-top: 1px solid var(--border);
     }
     .action-btn {
-      background: var(--black); color: #ccc; border: none; border-radius: 8px;
-      padding: 8px 16px; font-size: 12px; font-weight: 600; cursor: pointer;
-      transition: all 0.2s; display: flex; align-items: center; gap: 6px;
-      letter-spacing: 0.2px;
+      background: #fff; color: #34423c; border: 1px solid var(--border-strong); border-radius: 11px;
+      padding: 9px 14px; font-size: 12px; font-weight: 700; cursor: pointer;
+      transition: all 0.2s; display: flex; align-items: center; gap: 7px;
+      box-shadow: 0 6px 16px rgba(16,24,40,0.04);
     }
-    .action-btn:hover { background: var(--green); color: white; }
-    .action-btn.copied { background: var(--green); color: white; }
-    .action-btn svg { opacity: 0.8; }
+    .action-btn:hover { border-color: var(--green); color: var(--green); }
+    .action-btn.copied { background: var(--green-soft); color: var(--green-dark); border-color: var(--green); }
+    .action-btn svg { opacity: 0.7; width: 13px; height: 13px; }
     .action-btn:hover svg { opacity: 1; }
 
     /* Thinking */
@@ -176,8 +212,13 @@
 
     /* Follow-Up Suggestions */
     .followup-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
-    .followup-btn { background: white; border: 1px solid var(--green); color: var(--green); padding: 6px 12px; border-radius: 20px; font-size: 12px; cursor: pointer; transition: all 0.15s; font-family: inherit; }
-    .followup-btn:hover { background: var(--green); color: white; }
+    .followup-btn {
+      background: rgba(255,255,255,0.76); border: 1px solid rgba(21,153,71,0.28); color: var(--green-dark);
+      padding: 8px 16px; border-radius: 999px; font-size: 13px; font-weight: 600; cursor: pointer;
+      transition: all 0.15s; font-family: inherit;
+      box-shadow: 0 4px 12px rgba(16,24,40,0.03);
+    }
+    .followup-btn:hover { background: var(--green-soft); border-color: var(--green); }
 
     /* Map Container — full width outside message bubble */
     .map-wrap { width: 100%; margin: 12px 0; }
@@ -199,25 +240,93 @@
       border: 1px solid #fecaca; color: #b91c1c; font-size: 13px;
     }
 
+    /* ── Threat Badges ── */
+    .threat-badge {
+      display: inline-flex; justify-content: center; min-width: 44px;
+      border-radius: 999px; padding: 3px 10px; font-size: 10px;
+      font-weight: 900; letter-spacing: 0.04em; text-transform: uppercase;
+    }
+    .threat-badge.high { background: var(--threat-high-bg); color: var(--threat-high-text); }
+    .threat-badge.med { background: var(--threat-med-bg); color: var(--threat-med-text); }
+    .threat-badge.low { background: var(--threat-low-bg); color: var(--threat-low-text); }
+
+    /* ── Star Ratings ── */
+    .star-rating { color: var(--green-dark); font-weight: 900; }
+
+    /* ── Strategic Callout ── */
+    .strategic-callout {
+      display: grid; grid-template-columns: 44px 1fr; gap: 14px; align-items: start;
+      padding: 18px 20px; border-radius: 16px;
+      border: 1px solid rgba(21,153,71,0.22);
+      background: linear-gradient(180deg, #fbfefd, #f3faf6);
+      margin: 14px 0;
+    }
+    .strategic-callout .callout-icon {
+      width: 40px; height: 40px; border-radius: 999px;
+      display: grid; place-items: center;
+      background: #fff; color: var(--green-dark);
+      border: 1px solid #dff1e7;
+      font-size: 18px;
+    }
+    .strategic-callout p { margin: 0; color: #27342f; font-size: 13.5px; line-height: 1.55; }
+    .strategic-callout .callout-title {
+      font-size: 12px; font-weight: 900; text-transform: uppercase;
+      letter-spacing: 0.07em; color: var(--green-dark); margin-bottom: 6px;
+    }
+
+    /* ── Bottom Line Callout ── */
+    .bottom-line-callout {
+      display: grid; grid-template-columns: 38px 1fr; gap: 14px; align-items: start;
+      padding: 16px 18px; border-radius: 16px;
+      border: 1px solid rgba(21,153,71,0.22);
+      background: linear-gradient(180deg, #fbfefd, #f5faf7);
+      margin: 14px 0;
+    }
+    .bottom-line-callout .callout-icon {
+      width: 34px; height: 34px; border-radius: 999px;
+      display: grid; place-items: center;
+      background: var(--green-soft); color: var(--green-dark);
+      font-size: 16px;
+    }
+    .bottom-line-callout p { margin: 0; color: #27342f; font-size: 14px; line-height: 1.55; }
+
     /* ── Input bar ── */
-    .input-area { flex-shrink: 0; background: white; border-top: 1px solid var(--border); padding: 16px 20px; }
-    .input-bar { display: flex; gap: 10px; align-items: flex-end; max-width: 960px; margin: 0 auto; }
+    .input-area {
+      flex-shrink: 0;
+      padding: 14px 28px 18px;
+      background: linear-gradient(180deg, rgba(248,249,248,0), rgba(248,249,248,0.94) 28%, rgba(248,249,248,0.98));
+      backdrop-filter: blur(14px);
+    }
+    .input-bar {
+      display: flex; gap: 12px; align-items: center;
+      max-width: 960px; margin: 0 auto;
+      min-height: 58px;
+      border: 1px solid var(--border-strong);
+      border-radius: 20px;
+      background: rgba(255,255,255,0.96);
+      box-shadow: 0 14px 45px rgba(16,24,40,0.10);
+      padding: 8px 12px 8px 18px;
+    }
 
     textarea {
-      flex: 1; resize: none; border: 1.5px solid var(--border); border-radius: 10px;
-      padding: 10px 14px; font-size: 14px; font-family: inherit; line-height: 1.5;
-      min-height: 44px; max-height: 140px; outline: none; transition: border-color 0.2s; background: #fafafa;
+      flex: 1; resize: none; border: none;
+      padding: 8px 4px; font-size: 15px; font-family: inherit; line-height: 1.5;
+      min-height: 40px; max-height: 140px; outline: none; background: transparent;
+      color: var(--text);
     }
-    textarea:focus { border-color: var(--green); background: white; }
+    textarea::placeholder { color: #6c7771; }
+    textarea:focus { outline: none; }
 
     #sendBtn {
-      background: var(--green); color: white; border: none; border-radius: 10px;
-      width: 44px; height: 44px; cursor: pointer; font-size: 18px;
+      background: linear-gradient(135deg, #22a957, var(--green-dark));
+      color: white; border: none; border-radius: 14px;
+      width: 46px; height: 46px; cursor: pointer; font-size: 18px;
       display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-      transition: background 0.2s, opacity 0.2s;
+      transition: all 0.2s;
+      box-shadow: 0 8px 18px rgba(21,153,71,0.25);
     }
-    #sendBtn:hover { background: var(--green-dark); }
-    #sendBtn:disabled { opacity: 0.45; cursor: not-allowed; }
+    #sendBtn:hover { transform: translateY(-1px); box-shadow: 0 10px 22px rgba(21,153,71,0.3); }
+    #sendBtn:disabled { opacity: 0.35; cursor: not-allowed; transform: none; box-shadow: none; }
 
     .input-hint { text-align: center; font-size: 11px; color: var(--muted); margin-top: 8px; }
 
@@ -233,7 +342,7 @@
 <body>
 
 <header>
-  <span class="bh-badge">BH</span>
+  <span class="bh-badge"><img src="/pineapple-logo.svg" alt="BH"></span>
   <span class="header-title">Market Research Agent</span>
   <span class="header-sub">Strategy &amp; Insight · v3.6</span>
   <div class="header-status">
@@ -632,10 +741,64 @@
       messagesEl.appendChild(wrapEl);
     }
 
+    function enhanceRenderedHTML(el) {
+      // Threat badges: convert "HIGH", "HIGH", "Med", "Medium", "LOW" in table cells
+      el.querySelectorAll('td').forEach(td => {
+        const text = td.textContent.trim();
+        if (/^HIGH$/i.test(text)) {
+          td.innerHTML = '<span class="threat-badge high">High</span>';
+        } else if (/^(MED|MEDIUM)$/i.test(text)) {
+          td.innerHTML = '<span class="threat-badge med">Med</span>';
+        } else if (/^LOW$/i.test(text)) {
+          td.innerHTML = '<span class="threat-badge low">Low</span>';
+        }
+        // Star ratings: bold the number if it looks like a rating (e.g., 4.8, 3.5)
+        if (/^\d\.\d$/.test(text)) {
+          td.innerHTML = '<span class="star-rating">' + text + '</span>';
+        }
+      });
+
+      // Strategic implication callout
+      el.querySelectorAll('h2, h3').forEach(h => {
+        if (/strategic\s*implication/i.test(h.textContent)) {
+          // Find the next sibling content until next heading or hr
+          const content = [];
+          let sib = h.nextElementSibling;
+          while (sib && !['H1','H2','H3','HR'].includes(sib.tagName)) {
+            content.push(sib);
+            sib = sib.nextElementSibling;
+          }
+          if (content.length > 0) {
+            const callout = document.createElement('div');
+            callout.className = 'strategic-callout';
+            callout.innerHTML = '<div class="callout-icon">\u{1F3AF}</div><div><div class="callout-title">BH Strategic Implication</div></div>';
+            const body = callout.querySelector('div:last-child');
+            content.forEach(c => body.appendChild(c));
+            h.replaceWith(callout);
+          }
+        }
+      });
+
+      // Bottom line callout: detect "Bottom line:" in bold at start of a paragraph
+      el.querySelectorAll('p').forEach(p => {
+        const strong = p.querySelector('strong');
+        if (strong && /bottom\s*line/i.test(strong.textContent) && !p.closest('.bottom-line-callout')) {
+          const callout = document.createElement('div');
+          callout.className = 'bottom-line-callout';
+          callout.innerHTML = '<div class="callout-icon">\u{1F4CA}</div><div></div>';
+          const body = callout.querySelector('div:last-child');
+          const clone = p.cloneNode(true);
+          body.appendChild(clone);
+          p.replaceWith(callout);
+        }
+      });
+    }
+
     function renderMarkdown() {
       if (!bubbleEl || !markdown) return;
       bubbleEl.innerHTML = marked.parse(markdown);
       bubbleEl.querySelectorAll('a').forEach(a => a.setAttribute('target', '_blank'));
+      enhanceRenderedHTML(bubbleEl);
       messagesEl.scrollTop = messagesEl.scrollHeight;
     }
 
@@ -1058,6 +1221,7 @@
     bubble.className = 'msg-bubble';
     bubble.innerHTML = marked.parse(markdown);
     bubble.querySelectorAll('a').forEach(a => a.setAttribute('target', '_blank'));
+    enhanceRenderedHTML(bubble);
     wrap.append(label, bubble);
 
     // Action buttons below the bubble
@@ -2259,7 +2423,7 @@ ${rendered}
           for (const comp of (data.competitors || [])) {
             const color = getCompetitorColor(comp.name);
             const iconType = detectServiceType(comp.name, comp.type);
-            const el = createFacilityMarker({ color, iconType, size: 22 });
+            const el = createFacilityMarker({ color, iconType, size: 26 });
             new mapboxgl.Marker({ element: el, anchor: 'center' })
               .setLngLat([comp.lng, comp.lat])
               .setPopup(new mapboxgl.Popup({ maxWidth: '300px', offset: 12 }).setHTML(

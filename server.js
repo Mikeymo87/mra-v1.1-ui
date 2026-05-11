@@ -1946,13 +1946,36 @@ async function runAgentLoop(sessionId, userMessage, res) {
     if (fullText && compFiltered.length > 0) {
       const responseText = fullText.toLowerCase();
       const preTextMatch = compFiltered.length;
+
+      // Known system aliases — if the response mentions any alias, keep the competitor
+      const systemAliases = [
+        ['jackson', 'jmh', 'jackson health', 'jackson memorial'],
+        ['uhealth', 'university of miami', 'um health', 'u health'],
+        ['hca', 'mercy hospital', 'md now', 'md now urgent'],
+        ['mount sinai', 'msmc', 'mt sinai'],
+        ['nicklaus', "nicklaus children"],
+        ['memorial healthcare', 'memorial regional', 'memorial hospital'],
+        ['broward health'],
+        ['holy cross', 'trinity health'],
+        ['cleveland clinic'],
+        ['sanitas', 'keralty'],
+        ['coral gables hospital'],
+      ];
+
       compFiltered = compFiltered.filter(c => {
         const name = c.name.toLowerCase();
         // Check if the competitor name (or a significant portion) appears in the response
-        // Try full name first, then first two words (handles "Sanitas Medical Center" → "Sanitas")
         if (responseText.includes(name)) return true;
         const words = name.split(/\s+/);
         if (words.length >= 2 && responseText.includes(words[0] + ' ' + words[1])) return true;
+
+        // System alias match — check if this competitor belongs to a system mentioned in the response
+        for (const aliases of systemAliases) {
+          const compMatchesSystem = aliases.some(a => name.includes(a));
+          const responseMentionsSystem = aliases.some(a => responseText.includes(a));
+          if (compMatchesSystem && responseMentionsSystem) return true;
+        }
+
         // Single distinctive word (skip generic: "urgent", "care", "medical", "center", "clinic")
         const generic = new Set(['urgent', 'care', 'medical', 'center', 'clinic', 'health', 'hospital', 'emergency', 'florida', 'south']);
         const distinctive = words.filter(w => w.length > 3 && !generic.has(w));
