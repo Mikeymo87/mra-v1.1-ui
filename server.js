@@ -1907,14 +1907,38 @@ async function runAgentLoop(sessionId, userMessage, res) {
       console.log(`[Map] Distance filter: ${runGeo.bhLocations.length} BH → ${bhFiltered.length} nearby | ${runGeo.competitors.length} comp → ${compFiltered.length} nearby (${mapRadius}mi${radiusMatch ? ' — user-specified' : isNearQuery ? ' — near default' : ' — default'})`);
     }
     // De-duplicate: remove competitors that are actually BH locations
-    // Match by proximity (<0.1 mi = same building) or by name containing "Baptist"
+    // Also: steal Google ratings from competitor pins and apply to matching BH pins
     const preDedupCount = compFiltered.length;
     compFiltered = compFiltered.filter(c => {
-      if (/baptist|baptist health/i.test(c.name)) return false;
-      return !bhFiltered.some(b => haversineDistance(b.lat, b.lng, c.lat, c.lng) < 0.1);
+      const isBaptist = /baptist|baptist health/i.test(c.name);
+      const matchingBH = bhFiltered.find(b => haversineDistance(b.lat, b.lng, c.lat, c.lng) < 0.1);
+      if (isBaptist || matchingBH) {
+        // Transfer Google rating to BH pin before removing
+        if (matchingBH && c.rating) {
+          matchingBH.rating = c.rating;
+          matchingBH.reviews = c.reviews;
+        }
+        return false;
+      }
+      return true;
     });
     if (preDedupCount > compFiltered.length) {
-      console.log(`[Map] De-dup: removed ${preDedupCount - compFiltered.length} competitors that are BH locations`);
+      console.log(`[Map] De-dup: removed ${preDedupCount - compFiltered.length} competitors that are BH locations (transferred ratings)`);
+    }
+
+    // Jitter co-located pins so they don't stack on top of each other
+    const allPins = [...bhFiltered, ...compFiltered];
+    for (let i = 0; i < allPins.length; i++) {
+      for (let j = i + 1; j < allPins.length; j++) {
+        const dist = haversineDistance(allPins[i].lat, allPins[i].lng, allPins[j].lat, allPins[j].lng);
+        if (dist < 0.02) { // Within ~100 feet — visually overlapping
+          // Offset the second pin ~50m in a unique direction based on index
+          const angle = ((j - i) * 137.5) * Math.PI / 180; // Golden angle for even spread
+          const offsetDeg = 0.0004; // ~40m
+          allPins[j].lat += Math.cos(angle) * offsetDeg;
+          allPins[j].lng += Math.sin(angle) * offsetDeg;
+        }
+      }
     }
 
     // Text-match filter: only map competitors the agent actually mentioned in its response
