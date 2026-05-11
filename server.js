@@ -1969,9 +1969,24 @@ async function runAgentLoop(sessionId, userMessage, res) {
       bhLocations: bhFiltered,
       competitors: compFiltered,
       isochrone: runGeo.isochrone,
-      catchmentZips: runGeo.catchmentZips || null,
-      bhOutsideRadius: bhOutsideRadius.length > 0 ? bhOutsideRadius : null
+      catchmentZips: runGeo.catchmentZips || null
+      // bhOutsideRadius NOT included — only used for text note (sent as separate delta)
     };
+
+    // Simplify isochrone coordinates to 5 decimal places (~1m precision)
+    // Reduces payload from ~150KB to ~30KB — critical for Replit proxy delivery
+    if (mapData.isochrone?.features) {
+      for (const f of mapData.isochrone.features) {
+        if (f.geometry?.coordinates) {
+          f.geometry.coordinates = f.geometry.coordinates.map(ring =>
+            Array.isArray(ring[0])
+              ? ring.map(coord => coord.map(v => typeof v === 'number' ? Math.round(v * 100000) / 100000 : v))
+              : ring.map(v => typeof v === 'number' ? Math.round(v * 100000) / 100000 : v)
+          );
+        }
+      }
+    }
+
     sendSSE(res, 'map_data', mapData);
     console.log(`[Map] Sent: ${bhFiltered.length} BH + ${compFiltered.length} competitors${runGeo.isochrone ? ' + isochrone' : ''}${bhOutsideRadius.length > 0 ? ` (${bhOutsideRadius.length} BH outside radius)` : ''}`);
 
@@ -2417,6 +2432,8 @@ app.post('/api/chat', async (req, res) => {
 
   try {
     const fullText = await runAgentLoop(sessionId, query, res);
+    // Brief delay to let proxy flush map_data/choropleth before closing
+    await new Promise(r => setTimeout(r, 500));
     sendSSE(res, 'done', { text: fullText });
   } catch (err) {
     console.error('[Chat] Error:', err);
