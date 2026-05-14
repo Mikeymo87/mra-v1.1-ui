@@ -1413,12 +1413,7 @@
       wordBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> Word';
       wordBtn.addEventListener('click', () => downloadWord(markdown));
 
-      const igBtn = document.createElement('button');
-      igBtn.className = 'action-btn';
-      igBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 16l4-8 4 4 4-6"/></svg> Infographic';
-      igBtn.addEventListener('click', () => openInfographic(markdown));
-
-      actions.append(copyBtn, pdfBtn, wordBtn, igBtn);
+      actions.append(copyBtn, pdfBtn, wordBtn);
       wrapEl.appendChild(actions);
 
       // Render follow-up suggestions (pre-extracted before marked.parse)
@@ -1757,12 +1752,7 @@
     wordBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> Word';
     wordBtn.addEventListener('click', () => downloadWord(markdown));
 
-    const igBtn2 = document.createElement('button');
-    igBtn2.className = 'action-btn';
-    igBtn2.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 16l4-8 4 4 4-6"/></svg> Infographic';
-    igBtn2.addEventListener('click', () => openInfographic(markdown));
-
-    actions.append(copyBtn, pdfBtn, wordBtn, igBtn2);
+    actions.append(copyBtn, pdfBtn, wordBtn);
     wrap.appendChild(actions);
     appendMsg(wrap);
   }
