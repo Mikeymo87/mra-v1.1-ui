@@ -1416,12 +1416,13 @@
 
       // Render CSV download button if reviews were pulled
       if (pendingCsvDownload) {
+        const csvMeta = pendingCsvDownload;
+        pendingCsvDownload = null;
         const csvDiv = document.createElement('div');
         csvDiv.style.cssText = 'margin:12px 0;padding:12px 16px;background:#1a2a1a;border:1px solid #2EA84A;border-radius:8px;display:inline-flex;align-items:center;gap:10px;cursor:pointer';
-        csvDiv.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2EA84A" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg><span style="color:#2EA84A;font-weight:600;font-size:14px">Download CSV</span><span style="color:#8a9a8a;font-size:12px;margin-left:4px">' + pendingCsvDownload.location + ' \u2014 ' + pendingCsvDownload.count + ' reviews</span>';
-        csvDiv.addEventListener('click', () => window.open(pendingCsvDownload.url, '_blank'));
+        csvDiv.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2EA84A" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg><span style="color:#2EA84A;font-weight:600;font-size:14px">Download CSV</span><span style="color:#8a9a8a;font-size:12px;margin-left:4px">' + csvMeta.location + ' \u2014 ' + csvMeta.count + ' reviews</span>';
+        csvDiv.addEventListener('click', () => window.open(csvMeta.url, '_blank'));
         wrapEl.appendChild(csvDiv);
-        pendingCsvDownload = null;
       }
 
       // Render follow-up suggestions (pre-extracted before marked.parse)
