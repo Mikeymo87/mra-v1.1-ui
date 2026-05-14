@@ -1830,8 +1830,11 @@ async function runAgentLoop(sessionId, userMessage, res) {
 
       // Send CSV download button to frontend
       if (result._csvDownload) {
+        console.log('[CSV] Sending csv_ready SSE:', JSON.stringify(result._csvDownload));
         sendSSE(res, 'csv_ready', result._csvDownload);
         delete result._csvDownload; // don't send to model
+      } else if (toolCall.name === 'google_reviews_report') {
+        console.log('[CSV] No _csvDownload on result. Keys:', Object.keys(result));
       }
 
       // Accumulate choropleth data if this was a heat map tool call
