@@ -6,6 +6,7 @@ const fs = require('fs');
 const path = require('path');
 
 const REVIEWS_DIR = path.join(__dirname, 'data', 'reviews');
+const CACHE_DIR = path.join(__dirname, 'data', 'reviews-cache');
 const BASE_URL = 'https://api.dataforseo.com/v3/business_data/google/reviews';
 
 // South Florida place/brand stopwords — not people names
@@ -30,6 +31,14 @@ const NAME_STOPWORDS = new Set([
   'also', 'just', 'only', 'even', 'still', 'never', 'always', 'really',
   'from', 'for', 'the', 'and', 'but', 'with', 'treating', 'helping', 'being'
 ]);
+
+// ─── Safe date parser ─────────────────────────────────────────
+function safeDate(val) {
+  if (!val) return new Date(0);
+  // Handle "2026-05-14T00:00:00 +00:00" (space before tz)
+  const d = new Date(String(val).replace(' +', '+').replace(' -', '-'));
+  return isNaN(d.getTime()) ? new Date(0) : d;
+}
 
 // ─── Auth helper ───────────────────────────────────────────────
 function authHeader() {
@@ -354,7 +363,7 @@ function computeStats(reviews) {
     }
 
     if (r.timestamp) {
-      const d = new Date(r.timestamp);
+      const d = safeDate(r.timestamp);
       if (!oldest || d < oldest) oldest = d;
       if (!newest || d > newest) newest = d;
     }
@@ -409,7 +418,7 @@ function generateCSV(locationName, reviews, mentionedNames) {
       .join('; ');
 
     rows.push([
-      escapeCSV(r.timestamp ? new Date(r.timestamp).toISOString().split('T')[0] : ''),
+      escapeCSV(r.timestamp ? safeDate(r.timestamp).toISOString().split('T')[0] : (r.date || '')),
       escapeCSV(r.rating?.value || ''),
       escapeCSV(r.profile_name || ''),
       escapeCSV(r.local_guide ? 'Yes' : 'No'),
@@ -433,11 +442,70 @@ function generateCSV(locationName, reviews, mentionedNames) {
   return filename;
 }
 
+// ─── Review cache ─────────────────────────────────────────────
+function cacheKey(placeId) {
+  return placeId.replace(/[^a-zA-Z0-9]/g, '_') + '.json';
+}
+
+function loadCache(placeId) {
+  const filepath = path.join(CACHE_DIR, cacheKey(placeId));
+  if (!fs.existsSync(filepath)) return null;
+  try {
+    return JSON.parse(fs.readFileSync(filepath, 'utf-8'));
+  } catch { return null; }
+}
+
+function saveCache(placeId, locationName, reviews) {
+  fs.mkdirSync(CACHE_DIR, { recursive: true });
+  const filepath = path.join(CACHE_DIR, cacheKey(placeId));
+  fs.writeFileSync(filepath, JSON.stringify({
+    place_id: placeId,
+    location_name: locationName,
+    last_updated: new Date().toISOString(),
+    review_count: reviews.length,
+    newest_date: reviews[0]?.timestamp || reviews[0]?.date || null,
+    reviews
+  }), 'utf-8');
+}
+
+function mergeReviews(cached, fresh) {
+  // Build a set of existing review identifiers (author + date + rating) to dedupe
+  const seen = new Set();
+  const all = [];
+
+  for (const r of cached) {
+    const key = `${r.profile_name || r.author}|${r.timestamp || r.date}|${r.rating?.value || r.rating}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      all.push(r);
+    }
+  }
+
+  let newCount = 0;
+  for (const r of fresh) {
+    const key = `${r.profile_name || r.author}|${r.timestamp || r.date}|${r.rating?.value || r.rating}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      all.push(r);
+      newCount++;
+    }
+  }
+
+  // Sort newest first
+  all.sort((a, b) => {
+    const da = safeDate(a.timestamp || a.date);
+    const db = safeDate(b.timestamp || b.date);
+    return db - da;
+  });
+
+  return { merged: all, newCount };
+}
+
 // ─── Build full result with reviews ───────────────────────────
 function buildFullResult(locationName, reviews, stats, names, themes, csvFilename, totalAvailable, cost) {
   // Include full review text so Claude can parse, search, and report on anything the user asks
   const reviewsForClaude = reviews.map(r => ({
-    date: r.timestamp ? new Date(r.timestamp).toISOString().split('T')[0] : null,
+    date: r.timestamp ? safeDate(r.timestamp).toISOString().split('T')[0] : (r.date || null),
     rating: r.rating?.value || null,
     author: r.profile_name || null,
     local_guide: r.local_guide || false,
@@ -468,46 +536,95 @@ function buildFullResult(locationName, reviews, stats, names, themes, csvFilenam
 
 // ─── Main entry point ─────────────────────────────────────────
 async function executeReviewsReport(input, progressCb) {
-  const { query, reviewsLimit, since, include_csv } = input;
+  const { query, reviewsLimit, include_csv } = input;
 
   // 1. Resolve place_id via Google Places
   if (progressCb) progressCb({ phase: 'progress', message: `Looking up "${query}" on Google Maps...` });
   const place = await resolvePlaceId(query);
-  if (progressCb) progressCb({ phase: 'progress', message: `Found: ${place.name} (${place.total_reviews} reviews on Google). Submitting to DataForSEO...` });
+  if (progressCb) progressCb({ phase: 'progress', message: `Found: ${place.name} (${place.total_reviews} reviews on Google).` });
 
-  // 3. Pull the exact amount requested — sorted newest first, dates included on every review
-  const depth = Math.min(reviewsLimit || 200, 4490);
-  const { taskId, priority, cost: submitCost } = await submitReviewTask(place.place_id, depth);
+  // 2. Check cache
+  const cached = loadCache(place.place_id);
+  let reviews;
+  let fromCache = false;
+  const requestedDepth = Math.min(reviewsLimit || 200, 4490);
 
-  if (progressCb) progressCb({ phase: 'progress', message: `Task submitted (priority ${priority === 2 ? 'high' : 'standard'}). Polling for results...` });
+  if (cached && cached.reviews.length > 0) {
+    // Cache exists — only pull new reviews since the newest cached one
+    const newestCached = cached.reviews[0]?.timestamp || cached.reviews[0]?.date;
+    if (progressCb) progressCb({ phase: 'progress', message: `Cache hit: ${cached.reviews.length} reviews on file (newest: ${newestCached?.split?.('T')?.[0] || newestCached}). Checking for new reviews...` });
 
-  // 4. Poll for results
-  const result = await pollForResults(taskId, priority, (status) => {
-    if (progressCb) progressCb({ phase: 'progress', message: `Waiting for reviews... ${status.elapsed_seconds}s elapsed` });
-  });
+    // Pull a small batch to grab anything newer than our cache
+    const { taskId, priority } = await submitReviewTask(place.place_id, 200);
+    if (progressCb) progressCb({ phase: 'progress', message: `Pulling latest reviews to update cache...` });
 
-  let reviews = result.reviews;
-  if (progressCb) progressCb({ phase: 'progress', message: `Received ${reviews.length} reviews. Analyzing...` });
+    const result = await pollForResults(taskId, priority, (status) => {
+      if (progressCb) progressCb({ phase: 'progress', message: `Fetching new reviews... ${status.elapsed_seconds}s` });
+    });
 
-  // 5. Analyze
-  const names = extractMentionedNames(reviews);
-  const themes = analyzeThemes(reviews);
-  const stats = computeStats(reviews);
+    const freshReviews = result.reviews || [];
+    const { merged, newCount } = mergeReviews(cached.reviews, freshReviews);
+    reviews = merged;
+    fromCache = true;
 
-  // 6. Generate CSV (default true for 50+ reviews)
+    if (newCount > 0) {
+      saveCache(place.place_id, result.locationName || place.name, reviews);
+      if (progressCb) progressCb({ phase: 'progress', message: `Added ${newCount} new reviews. Total: ${reviews.length}. Analyzing...` });
+    } else {
+      if (progressCb) progressCb({ phase: 'progress', message: `Cache is current (${reviews.length} reviews). No new reviews found. Analyzing...` });
+    }
+
+    // If user asked for more than what's cached, pull the full amount
+    if (requestedDepth > reviews.length) {
+      if (progressCb) progressCb({ phase: 'progress', message: `User requested ${requestedDepth} but cache has ${reviews.length}. Pulling full set...` });
+      const { taskId: fullId, priority: fullPri } = await submitReviewTask(place.place_id, requestedDepth);
+      const fullResult = await pollForResults(fullId, fullPri, (status) => {
+        if (progressCb) progressCb({ phase: 'progress', message: `Pulling ${requestedDepth} reviews... ${status.elapsed_seconds}s` });
+      });
+      const { merged: fullMerged } = mergeReviews(reviews, fullResult.reviews || []);
+      reviews = fullMerged;
+      saveCache(place.place_id, fullResult.locationName || place.name, reviews);
+      if (progressCb) progressCb({ phase: 'progress', message: `Now have ${reviews.length} reviews total. Analyzing...` });
+    }
+  } else {
+    // No cache — full pull
+    if (progressCb) progressCb({ phase: 'progress', message: `No cache. Pulling ${requestedDepth} reviews from DataForSEO...` });
+    const { taskId, priority } = await submitReviewTask(place.place_id, requestedDepth);
+    if (progressCb) progressCb({ phase: 'progress', message: `Task submitted (priority ${priority === 2 ? 'high' : 'standard'}). Polling...` });
+
+    const result = await pollForResults(taskId, priority, (status) => {
+      if (progressCb) progressCb({ phase: 'progress', message: `Waiting for reviews... ${status.elapsed_seconds}s elapsed` });
+    });
+
+    reviews = result.reviews || [];
+    saveCache(place.place_id, result.locationName || place.name, reviews);
+    if (progressCb) progressCb({ phase: 'progress', message: `Received and cached ${reviews.length} reviews. Analyzing...` });
+  }
+
+  // Trim to requested amount (reviews are sorted newest first)
+  const trimmed = reviews.slice(0, requestedDepth);
+
+  // 3. Analyze
+  const names = extractMentionedNames(trimmed);
+  const themes = analyzeThemes(trimmed);
+  const stats = computeStats(trimmed);
+
+  // 4. Generate CSV
   let csvFilename = null;
-  const shouldCSV = include_csv !== false && reviews.length >= 10;
+  const shouldCSV = include_csv !== false && trimmed.length >= 10;
   if (shouldCSV) {
-    csvFilename = generateCSV(result.locationName || query, reviews, names);
+    csvFilename = generateCSV(place.name || query, trimmed, names);
     if (progressCb) progressCb({ phase: 'progress', message: `CSV generated: ${csvFilename}` });
   }
 
-  // 7. Build full result with reviews for Claude to parse
+  // 5. Build full result
+  const locationName = place.name || query;
   const fullResult = buildFullResult(
-    result.locationName || place.name || query,
-    reviews, stats, names, themes, csvFilename,
-    result.totalAvailable, result.cost
+    locationName, trimmed, stats, names, themes, csvFilename,
+    place.total_reviews, null
   );
+
+  if (fromCache) fullResult.cache_status = `Served from cache (${reviews.length} total cached)`;
 
   return fullResult;
 }
