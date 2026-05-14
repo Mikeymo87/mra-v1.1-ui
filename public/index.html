@@ -6,6 +6,7 @@
   <title>BH Market Research Agent</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.9.4/mapbox-gl.css" rel="stylesheet">
   <script src="https://api.mapbox.com/mapbox-gl-js/v3.9.4/mapbox-gl.js"></script>
   <style>
@@ -289,6 +290,245 @@
       font-size: 16px;
     }
     .bottom-line-callout p { margin: 0; color: #27342f; font-size: 14px; line-height: 1.55; }
+
+    /* ── Source Pills ── */
+    .source-pills {
+      display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 14px 0 6px;
+    }
+    .source-pills-label {
+      font-size: 12px; font-weight: 900; text-transform: uppercase;
+      letter-spacing: 0.07em; color: var(--green-dark); margin-right: 4px;
+    }
+    .source-pill {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 8px 12px; border: 1px solid var(--border); border-radius: 11px;
+      background: #fff; color: #34423c; font-size: 11px; font-weight: 600;
+      box-shadow: 0 4px 12px rgba(16,24,40,0.03);
+    }
+    .source-pill .source-icon {
+      width: 18px; height: 18px; border-radius: 5px; display: grid; place-items: center;
+      background: var(--green-soft); color: var(--green-dark); font-size: 10px;
+    }
+    .source-pill .source-detail { color: var(--muted); font-size: 10px; margin-top: 1px; }
+
+    /* ── View Mode Toggle ── */
+    .view-toggle {
+      display: inline-flex; border: 1px solid var(--border); border-radius: 10px;
+      overflow: hidden; margin: 0 0 12px; font-size: 12px; font-weight: 700;
+    }
+    .view-toggle button {
+      padding: 7px 16px; border: none; background: #fff; color: var(--muted);
+      cursor: pointer; transition: all 0.15s; font-family: inherit; font-weight: 700;
+    }
+    .view-toggle button.active {
+      background: var(--green-dark); color: white;
+    }
+    .view-toggle button:not(.active):hover { background: var(--green-soft); color: var(--green-dark); }
+
+    /* ── Infographic Mode ── */
+    .infographic-view { display: none; }
+    .infographic-view.active { display: block; }
+    .text-view.hidden { display: none; }
+
+    .kpi-row {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 10px; margin: 16px 0;
+    }
+    .kpi-tile {
+      display: grid; grid-template-columns: 38px 1fr; align-items: center; gap: 10px;
+      border: 1px solid var(--border); border-radius: 14px;
+      background: linear-gradient(180deg, #ffffff, #fbfcfc);
+      padding: 12px 14px; box-shadow: 0 6px 16px rgba(16,24,40,0.03);
+    }
+    .kpi-tile .kpi-icon {
+      width: 34px; height: 34px; border-radius: 10px;
+      display: grid; place-items: center;
+      background: var(--green-soft); color: var(--green-dark);
+      border: 1px solid #dff1e7; font-size: 14px;
+    }
+    .kpi-tile .kpi-label { color: #48564f; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; }
+    .kpi-tile .kpi-value { color: var(--green-dark); font-size: 18px; font-weight: 900; letter-spacing: -0.03em; margin-top: 1px; }
+
+    .info-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 14px 0;
+    }
+    @media (max-width: 900px) { .info-grid { grid-template-columns: 1fr; } }
+
+    .info-panel { margin-bottom: 12px; }
+    .info-panel-title {
+      font-size: 12px; font-weight: 900; text-transform: uppercase;
+      letter-spacing: 0.07em; color: var(--green-dark); margin-bottom: 8px;
+    }
+
+    .finding-card {
+      display: grid; grid-template-columns: 24px 1fr; gap: 10px; align-items: start;
+      border: 1px solid var(--border); border-radius: 11px;
+      background: #fff; padding: 10px 12px; margin-bottom: 6px;
+    }
+    .finding-num {
+      width: 22px; height: 22px; border-radius: 999px;
+      display: grid; place-items: center;
+      background: var(--green); color: #fff; font-size: 11px; font-weight: 900;
+    }
+    .finding-card p { margin: 0; font-size: 12.5px; line-height: 1.4; color: #27342f; }
+
+    /* ── Full-Screen Infographic Overlay ── */
+    .ig-overlay {
+      position: fixed; inset: 0; z-index: 200;
+      background: linear-gradient(180deg, #f7f8f7 0%, #ffffff 30%, #f4f6f5 100%);
+      overflow-y: auto; opacity: 0; pointer-events: none;
+      transition: opacity 0.3s ease;
+    }
+    .ig-overlay.active { opacity: 1; pointer-events: all; }
+
+    .ig-topbar {
+      position: sticky; top: 0; z-index: 210;
+      height: 60px; display: flex; align-items: center; justify-content: space-between;
+      padding: 0 32px;
+      background: linear-gradient(180deg, #111820 0%, #19222b 100%);
+      box-shadow: 0 10px 28px rgba(16,24,40,0.22);
+    }
+    .ig-topbar-left { display: flex; align-items: center; gap: 12px; }
+    .ig-topbar-logo {
+      width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center;
+      background: rgba(21,153,71,0.08); border: 1px solid rgba(57,214,115,0.5);
+      color: #8cf0ad; font-weight: 900; font-size: 11px;
+    }
+    .ig-topbar-title { color: #fff; font-weight: 800; font-size: 15px; }
+    .ig-topbar-sub { color: #aab4be; font-size: 12px; }
+    .ig-close-btn {
+      background: none; border: 1px solid rgba(255,255,255,0.15); color: #fff;
+      padding: 8px 20px; border-radius: 10px; font-weight: 700; font-size: 13px;
+      cursor: pointer; transition: background 0.15s;
+    }
+    .ig-close-btn:hover { background: rgba(255,255,255,0.08); }
+
+    .ig-body {
+      max-width: 1200px; margin: 0 auto; padding: 40px 32px 80px;
+    }
+    .ig-title {
+      font-size: 28px; font-weight: 900; letter-spacing: -0.04em;
+      color: var(--ink); margin-bottom: 24px; line-height: 1.15;
+    }
+    .ig-bottom-line-card {
+      display: grid; grid-template-columns: 48px 1fr; gap: 16px; align-items: start;
+      padding: 20px 24px; margin-bottom: 28px;
+      border: 1px solid rgba(21,153,71,0.22); border-radius: 18px;
+      background: linear-gradient(180deg, #fbfefd, #f3faf6);
+    }
+    .ig-bottom-line-icon {
+      width: 44px; height: 44px; border-radius: 999px; display: grid; place-items: center;
+      background: var(--green-soft); color: var(--green-dark); font-size: 20px;
+    }
+    .ig-bottom-line-card p { margin: 0; color: #27342f; font-size: 15px; line-height: 1.6; }
+
+    .ig-kpi-row {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 14px; margin-bottom: 32px;
+    }
+    .ig-kpi {
+      display: grid; grid-template-columns: 44px 1fr; align-items: center; gap: 12px;
+      padding: 16px 18px; border: 1px solid var(--border); border-radius: 16px;
+      background: linear-gradient(180deg, #ffffff, #fbfcfc);
+      box-shadow: 0 8px 20px rgba(16,24,40,0.035);
+    }
+    .ig-kpi-icon {
+      width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center;
+      background: var(--green-soft); color: var(--green-dark); border: 1px solid #dff1e7;
+      font-size: 16px;
+    }
+    .ig-kpi-label { color: #48564f; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; }
+    .ig-kpi-value { color: var(--green-dark); font-size: 22px; font-weight: 900; letter-spacing: -0.03em; margin-top: 2px; }
+    .ig-kpi-detail { color: var(--muted); font-size: 11px; margin-top: 2px; }
+
+    .ig-chart-card {
+      background: #fff; border: 1px solid var(--border); border-radius: 18px;
+      padding: 24px; margin-bottom: 24px;
+      box-shadow: 0 12px 32px rgba(16,24,40,0.06);
+    }
+    .ig-chart-card h3 {
+      font-size: 13px; font-weight: 900; text-transform: uppercase;
+      letter-spacing: 0.07em; color: var(--green-dark); margin-bottom: 16px;
+    }
+    .ig-chart-card canvas { max-height: 320px; }
+
+    .ig-section { margin-bottom: 28px; }
+    .ig-section-title {
+      font-size: 13px; font-weight: 900; text-transform: uppercase;
+      letter-spacing: 0.07em; color: var(--green-dark); margin-bottom: 12px;
+    }
+    .ig-section table {
+      width: 100%; border-collapse: separate; border-spacing: 0;
+      border: 1px solid var(--border); border-radius: 13px;
+      background: #fff; box-shadow: 0 6px 18px rgba(16,24,40,0.03);
+      overflow: hidden;
+    }
+    .ig-section th {
+      padding: 12px 14px; text-align: left; background: #fafbfb;
+      color: #26312c; border-bottom: 1px solid var(--border);
+      font-size: 11px; font-weight: 850; text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .ig-section td {
+      padding: 12px 14px; color: #26312c; border-bottom: 1px solid #edf0ef;
+      font-size: 13px; line-height: 1.4; vertical-align: top;
+    }
+    .ig-section tbody tr:last-child td { border-bottom: 0; }
+    .ig-section tbody tr:nth-child(even) td { background: #fbfcfc; }
+    .ig-section blockquote {
+      margin: 12px 0; padding: 12px 18px; border-left: 3px solid var(--green);
+      background: var(--green-soft); border-radius: 0 10px 10px 0;
+      font-size: 13px; color: #27342f;
+    }
+    .ig-section p { font-size: 14px; line-height: 1.6; color: #27342f; margin: 8px 0; }
+    .ig-section strong { color: var(--ink); }
+    .ig-section h3 { font-size: 15px; font-weight: 800; margin: 16px 0 8px; color: var(--ink); }
+    .ig-section ul, .ig-section ol { padding-left: 20px; margin: 8px 0; }
+    .ig-section li { font-size: 14px; line-height: 1.55; margin-bottom: 4px; }
+
+    .ig-finding {
+      display: grid; grid-template-columns: 28px 1fr; gap: 12px; align-items: start;
+      border: 1px solid var(--border); border-radius: 14px;
+      background: #fff; padding: 14px 16px; margin-bottom: 8px;
+      box-shadow: 0 4px 12px rgba(16,24,40,0.03);
+    }
+    .ig-finding-num {
+      width: 26px; height: 26px; border-radius: 999px; display: grid; place-items: center;
+      background: var(--green); color: #fff; font-size: 12px; font-weight: 900;
+    }
+    .ig-finding p { margin: 0; font-size: 14px; line-height: 1.5; color: #27342f; }
+
+    .ig-strategic {
+      display: grid; grid-template-columns: 60px 1fr; gap: 18px; align-items: start;
+      padding: 24px; border-radius: 18px; margin-bottom: 28px;
+      border: 1px solid rgba(21,153,71,0.22);
+      background: linear-gradient(180deg, #fbfefd, #f5faf7);
+    }
+    .ig-strategic-icon {
+      width: 56px; height: 56px; border-radius: 999px; display: grid; place-items: center;
+      background: #fff; color: var(--green-dark); border: 1px solid #dff1e7; font-size: 22px;
+    }
+    .ig-strategic h3 {
+      font-size: 13px; font-weight: 900; text-transform: uppercase;
+      letter-spacing: 0.07em; color: var(--green-dark); margin-bottom: 8px;
+    }
+    .ig-strategic p, .ig-strategic li { font-size: 14px; line-height: 1.55; color: #27342f; }
+    .ig-strategic ul { padding-left: 18px; margin: 8px 0 0; }
+    .ig-strategic li { margin-bottom: 6px; }
+
+    .ig-sources {
+      display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 20px;
+    }
+    .ig-sources-label {
+      font-size: 12px; font-weight: 900; text-transform: uppercase;
+      letter-spacing: 0.07em; color: var(--green-dark); margin-right: 4px;
+    }
+
+    @media print {
+      .ig-topbar { display: none; }
+      .ig-overlay { position: static; overflow: visible; opacity: 1; pointer-events: all; }
+      .ig-body { padding: 20px; }
+    }
 
     /* ── Input bar ── */
     .input-area {
@@ -741,27 +981,27 @@
       messagesEl.appendChild(wrapEl);
     }
 
-    function enhanceRenderedHTML(el) {
-      // Threat badges: convert "HIGH", "HIGH", "Med", "Medium", "LOW" in table cells
+    function enhanceRenderedHTML(el, opts = {}) {
+      // ── Threat badges ──
       el.querySelectorAll('td').forEach(td => {
         const text = td.textContent.trim();
-        if (/^HIGH$/i.test(text)) {
+        if (/^\*{0,2}HIGH\*{0,2}$/i.test(text)) {
           td.innerHTML = '<span class="threat-badge high">High</span>';
-        } else if (/^(MED|MEDIUM)$/i.test(text)) {
+        } else if (/^\*{0,2}(MED|MEDIUM)\*{0,2}$/i.test(text)) {
           td.innerHTML = '<span class="threat-badge med">Med</span>';
-        } else if (/^LOW$/i.test(text)) {
+        } else if (/^\*{0,2}LOW\*{0,2}$/i.test(text)) {
           td.innerHTML = '<span class="threat-badge low">Low</span>';
         }
-        // Star ratings: bold the number if it looks like a rating (e.g., 4.8, 3.5)
-        if (/^\d\.\d$/.test(text)) {
-          td.innerHTML = '<span class="star-rating">' + text + '</span>';
+        // Star ratings
+        if (/^\*{0,2}\d\.\d\*{0,2}$/.test(text)) {
+          const num = text.replace(/\*/g, '');
+          td.innerHTML = '<span class="star-rating">' + num + '</span>';
         }
       });
 
-      // Strategic implication callout
+      // ── Strategic implication callout ──
       el.querySelectorAll('h2, h3').forEach(h => {
         if (/strategic\s*implication/i.test(h.textContent)) {
-          // Find the next sibling content until next heading or hr
           const content = [];
           let sib = h.nextElementSibling;
           while (sib && !['H1','H2','H3','HR'].includes(sib.tagName)) {
@@ -779,20 +1019,265 @@
         }
       });
 
-      // Bottom line callout: detect "Bottom line:" in bold at start of a paragraph
+      // ── Bottom line / executive summary callout ──
       el.querySelectorAll('p').forEach(p => {
         const strong = p.querySelector('strong');
-        if (strong && /bottom\s*line/i.test(strong.textContent) && !p.closest('.bottom-line-callout')) {
+        if (strong && /bottom\s*line/i.test(strong.textContent) && !p.closest('.bottom-line-callout') && !p.closest('.strategic-callout')) {
           const callout = document.createElement('div');
           callout.className = 'bottom-line-callout';
           callout.innerHTML = '<div class="callout-icon">\u{1F4CA}</div><div></div>';
-          const body = callout.querySelector('div:last-child');
-          const clone = p.cloneNode(true);
-          body.appendChild(clone);
+          callout.querySelector('div:last-child').appendChild(p.cloneNode(true));
           p.replaceWith(callout);
         }
       });
+
+      // ── Executive Summary as callout (when it's a list of key points) ──
+      el.querySelectorAll('h2').forEach(h => {
+        if (/executive\s*summary/i.test(h.textContent)) {
+          const ul = h.nextElementSibling;
+          if (ul && ul.tagName === 'UL') {
+            const callout = document.createElement('div');
+            callout.className = 'bottom-line-callout';
+            callout.style.gridTemplateColumns = '1fr'; // full width for list
+            const clone = ul.cloneNode(true);
+            clone.style.margin = '0';
+            clone.style.paddingLeft = '18px';
+            callout.appendChild(clone);
+            h.style.display = 'none';
+            ul.replaceWith(callout);
+          }
+        }
+      });
+
+      // ── Source pills ──
+      el.querySelectorAll('h2, h3, p').forEach(h => {
+        if (h.tagName === 'P' && !/^sources?:/i.test(h.textContent.trim())) return;
+        if ((h.tagName === 'H2' || h.tagName === 'H3') && !/^sources?$/i.test(h.textContent.trim())) return;
+        // Found a "Sources" heading or bold label — convert the following list
+        const ul = h.nextElementSibling;
+        if (!ul || ul.tagName !== 'UL') return;
+
+        const sourceIcons = {
+          'yext': '\u{1F4CD}', 'google': '\u{1F50D}', 'census': '\u{1F3DB}', 'cdc': '\u{1FA7A}',
+          'openroute': '\u{1F697}', 'drive': '\u{1F697}', 'distance': '\u{1F697}',
+          'firecrawl': '\u{1F310}', 'places': '\u{1F50D}', 'geocod': '\u{1F4CD}',
+        };
+
+        const pillsDiv = document.createElement('div');
+        pillsDiv.className = 'source-pills';
+        pillsDiv.innerHTML = '<span class="source-pills-label">Sources</span>';
+
+        ul.querySelectorAll('li').forEach(li => {
+          const text = li.textContent.trim();
+          // Find matching icon
+          let icon = '\u{1F4C4}'; // default doc icon
+          for (const [key, emoji] of Object.entries(sourceIcons)) {
+            if (text.toLowerCase().includes(key)) { icon = emoji; break; }
+          }
+          // Split into label + detail at first colon
+          const colonIdx = text.indexOf(':');
+          const label = colonIdx > 0 ? text.substring(0, colonIdx).trim() : text;
+          const detail = colonIdx > 0 ? text.substring(colonIdx + 1).trim() : '';
+
+          const pill = document.createElement('div');
+          pill.className = 'source-pill';
+          pill.innerHTML = `<div class="source-icon">${icon}</div><div><b>${label}</b>${detail ? `<span class="source-detail">${detail}</span>` : ''}</div>`;
+          pillsDiv.appendChild(pill);
+        });
+
+        h.replaceWith(pillsDiv);
+        ul.remove();
+      });
     }
+
+    // ── Infographic Mode Parser ──
+    function parseMarkdownToBlocks(markdown) {
+      const blocks = [];
+      const lines = markdown.split('\n');
+      let currentSection = null;
+      let currentContent = [];
+      let title = null;
+
+      function flushSection() {
+        if (!currentSection && currentContent.length === 0) return;
+        if (currentSection) {
+          const content = currentContent.join('\n').trim();
+          if (!content) return;
+
+          const sectionLower = currentSection.toLowerCase();
+          if (/executive\s*summary|bottom\s*line|the\s*bottom\s*line|the\s*short\s*version|the\s*strategic\s*headline/i.test(sectionLower)) {
+            blocks.push({ type: 'bottom_line', title: currentSection, markdown: content });
+          } else if (/strategic\s*implication|marketing\s*implication|recommendation/i.test(sectionLower)) {
+            blocks.push({ type: 'callout', variant: 'strategic', title: currentSection, markdown: content });
+          } else if (/key\s*finding|main\s*finding/i.test(sectionLower)) {
+            blocks.push({ type: 'findings', title: currentSection, markdown: content });
+          } else if (/source/i.test(sectionLower)) {
+            blocks.push({ type: 'sources', title: currentSection, markdown: content });
+          } else {
+            blocks.push({ type: 'section', title: currentSection, markdown: content });
+          }
+        } else if (currentContent.length > 0) {
+          blocks.push({ type: 'markdown', markdown: currentContent.join('\n').trim() });
+        }
+        currentContent = [];
+      }
+
+      let seenFirstHeading = false;
+      for (const line of lines) {
+        const h1Match = line.match(/^#\s+(.+)/);
+        const h2Match = line.match(/^##\s+(.+)/);
+        const h3Match = line.match(/^###\s+(.+)/);
+
+        if (h1Match && !title) {
+          flushSection();
+          title = h1Match[1].trim();
+          seenFirstHeading = true;
+          continue;
+        }
+        // Use first H2 as title if no H1 found yet
+        if (h2Match && !title && !seenFirstHeading) {
+          flushSection();
+          title = h2Match[1].trim();
+          seenFirstHeading = true;
+          continue;
+        }
+        if (h2Match || h3Match) {
+          flushSection();
+          currentSection = (h2Match || h3Match)[1].trim();
+          seenFirstHeading = true;
+          continue;
+        }
+        if (line.trim() === '---') {
+          continue;
+        }
+        // Skip preamble text before first heading (agent thinking out loud)
+        if (!seenFirstHeading && !h1Match && !h2Match && !h3Match) {
+          continue;
+        }
+        currentContent.push(line);
+      }
+      flushSection();
+
+      // Detect complexity
+      const tableCount = (markdown.match(/\|.*\|.*\|/g) || []).length;
+      const wordCount = markdown.split(/\s+/).length;
+      const complexity = wordCount < 250 && tableCount === 0 ? 'simple'
+        : wordCount < 900 && tableCount <= 1 ? 'standard' : 'deep';
+
+      return { title, blocks, complexity };
+    }
+
+    function renderInfographicMode(parsed, container) {
+      container.innerHTML = '';
+      if (parsed.title) {
+        const h = document.createElement('h1');
+        h.textContent = parsed.title;
+        h.style.cssText = 'font-size:20px;font-weight:850;letter-spacing:-0.03em;border-bottom:2px solid var(--green);padding-bottom:8px;margin-bottom:16px;';
+        container.appendChild(h);
+      }
+
+      // Separate blocks into left/right columns for grid layout
+      const leftBlocks = [];
+      const rightBlocks = [];
+      let bottomBlocks = [];
+
+      for (const block of parsed.blocks) {
+        if (block.type === 'bottom_line') {
+          // Render at top, outside grid
+          const div = document.createElement('div');
+          div.className = 'bottom-line-callout';
+          div.style.gridTemplateColumns = '1fr';
+          div.innerHTML = marked.parse(block.markdown);
+          container.appendChild(div);
+        } else if (block.type === 'callout') {
+          bottomBlocks.push(block);
+        } else if (block.type === 'sources') {
+          bottomBlocks.push(block);
+        } else if (block.type === 'findings') {
+          rightBlocks.push(block);
+        } else {
+          // Alternate sections between left and right
+          if (leftBlocks.length <= rightBlocks.length) {
+            leftBlocks.push(block);
+          } else {
+            rightBlocks.push(block);
+          }
+        }
+      }
+
+      // Two-column grid
+      if (leftBlocks.length > 0 || rightBlocks.length > 0) {
+        const grid = document.createElement('div');
+        grid.className = 'info-grid';
+
+        const leftCol = document.createElement('div');
+        const rightCol = document.createElement('div');
+
+        for (const b of leftBlocks) {
+          leftCol.appendChild(renderBlock(b));
+        }
+        for (const b of rightBlocks) {
+          rightCol.appendChild(renderBlock(b));
+        }
+
+        grid.append(leftCol, rightCol);
+        container.appendChild(grid);
+      }
+
+      // Bottom blocks (callouts, sources)
+      for (const b of bottomBlocks) {
+        container.appendChild(renderBlock(b));
+      }
+
+      enhanceRenderedHTML(container);
+    }
+
+    function renderBlock(block) {
+      const div = document.createElement('div');
+      div.className = 'info-panel';
+
+      if (block.title) {
+        const title = document.createElement('div');
+        title.className = 'info-panel-title';
+        title.textContent = block.title;
+        div.appendChild(title);
+      }
+
+      if (block.type === 'callout') {
+        const callout = document.createElement('div');
+        callout.className = 'strategic-callout';
+        callout.innerHTML = `<div class="callout-icon">\u{1F3AF}</div><div><div class="callout-title">${block.title || 'Strategic Implication'}</div>${marked.parse(block.markdown)}</div>`;
+        div.innerHTML = '';
+        div.appendChild(callout);
+      } else if (block.type === 'findings') {
+        // Parse list items into numbered finding cards
+        const temp = document.createElement('div');
+        temp.innerHTML = marked.parse(block.markdown);
+        const items = temp.querySelectorAll('li');
+        let num = 1;
+        items.forEach(li => {
+          const card = document.createElement('div');
+          card.className = 'finding-card';
+          card.innerHTML = `<div class="finding-num">${num++}</div><p>${li.innerHTML}</p>`;
+          div.appendChild(card);
+        });
+      } else if (block.type === 'sources') {
+        const temp = document.createElement('div');
+        temp.innerHTML = marked.parse(block.markdown);
+        div.appendChild(temp);
+        // enhanceRenderedHTML will convert sources list to pills
+      } else {
+        const content = document.createElement('div');
+        content.innerHTML = marked.parse(block.markdown);
+        div.appendChild(content);
+      }
+
+      return div;
+    }
+
+    // Hoist key functions to window so full-screen infographic overlay can access them
+    window._parseMarkdownToBlocks = parseMarkdownToBlocks;
+    window._enhanceRenderedHTML = enhanceRenderedHTML;
 
     function renderMarkdown() {
       if (!bubbleEl || !markdown) return;
@@ -843,6 +1328,12 @@
                   step.id = stepId;
                   step.innerHTML = `<span class="step-icon spinner-icon">&#9696;</span><span class="step-label">${payload.label}</span><span class="step-meta">...</span>`;
                   timeline.appendChild(step);
+                } else if (payload.phase === 'progress') {
+                  const step = document.getElementById(stepId);
+                  if (step) {
+                    const meta = step.querySelector('.step-meta');
+                    if (meta) meta.textContent = payload.label || '...';
+                  }
                 } else if (payload.phase === 'done') {
                   const step = document.getElementById(stepId);
                   if (step) {
@@ -863,6 +1354,12 @@
             // Agent-triggered map control — queue if map not ready yet
             if (activeMap) { handleMapCommand(payload); }
             else { if (!window._pendingMapCommands) window._pendingMapCommands = []; window._pendingMapCommands.push(payload); }
+          } else if (eventType === 'csv_ready') {
+            // Render download button in chat
+            ensureBubble();
+            const csvBtn = `\n\n<div class="csv-download" style="margin:12px 0;padding:12px 16px;background:#1a2a1a;border:1px solid #2EA84A;border-radius:8px;display:inline-flex;align-items:center;gap:10px;cursor:pointer" onclick="window.open('${payload.url}','_blank')"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2EA84A" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg><span style="color:#2EA84A;font-weight:600;font-size:14px">Download CSV</span><span style="color:#8a9a8a;font-size:12px;margin-left:4px">${payload.location} — ${payload.count} reviews</span></div>\n\n`;
+            markdown += csvBtn;
+            scheduleRender();
           } else if (eventType === 'choropleth_data') {
             // Store choropleth data — render after text is done
             pendingChoropleth = payload;
@@ -916,7 +1413,12 @@
       wordBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> Word';
       wordBtn.addEventListener('click', () => downloadWord(markdown));
 
-      actions.append(copyBtn, pdfBtn, wordBtn);
+      const igBtn = document.createElement('button');
+      igBtn.className = 'action-btn';
+      igBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 16l4-8 4 4 4-6"/></svg> Infographic';
+      igBtn.addEventListener('click', () => openInfographic(markdown));
+
+      actions.append(copyBtn, pdfBtn, wordBtn, igBtn);
       wrapEl.appendChild(actions);
 
       // Render follow-up suggestions (pre-extracted before marked.parse)
@@ -1255,7 +1757,12 @@
     wordBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> Word';
     wordBtn.addEventListener('click', () => downloadWord(markdown));
 
-    actions.append(copyBtn, pdfBtn, wordBtn);
+    const igBtn2 = document.createElement('button');
+    igBtn2.className = 'action-btn';
+    igBtn2.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 16l4-8 4 4 4-6"/></svg> Infographic';
+    igBtn2.addEventListener('click', () => openInfographic(markdown));
+
+    actions.append(copyBtn, pdfBtn, wordBtn, igBtn2);
     wrap.appendChild(actions);
     appendMsg(wrap);
   }
@@ -2483,6 +2990,277 @@ ${rendered}
     } catch (e) {
       console.warn('[Choropleth] Render failed:', e.message);
     }
+  }
+
+  // ── Full-Screen Infographic Mode ──
+  let igCharts = [];
+
+  function openInfographic(md) {
+    let overlay = document.getElementById('ig-overlay');
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.id = 'ig-overlay';
+      overlay.className = 'ig-overlay';
+      overlay.innerHTML = `
+        <div class="ig-topbar">
+          <div class="ig-topbar-left">
+            <div class="ig-topbar-logo">BH</div>
+            <span class="ig-topbar-title">Market Research Agent</span>
+            <span class="ig-topbar-sub">Infographic View</span>
+          </div>
+          <button class="ig-close-btn" onclick="closeInfographic()">Close</button>
+        </div>
+        <div class="ig-body" id="ig-body"></div>`;
+      document.body.appendChild(overlay);
+    }
+    const body = document.getElementById('ig-body');
+    body.innerHTML = '';
+    igCharts.forEach(c => c.destroy()); igCharts = [];
+
+    // Parse markdown (use window-hoisted version from streamChat scope)
+    const parsed = window._parseMarkdownToBlocks(md);
+
+    // Title
+    if (parsed.title) {
+      const h = document.createElement('h1');
+      h.className = 'ig-title';
+      h.textContent = parsed.title;
+      body.appendChild(h);
+    }
+
+    // Bottom line - from parsed blocks OR from inline bold text
+    let hasBottomLine = false;
+    for (const b of parsed.blocks) {
+      if (b.type === 'bottom_line') {
+        const card = document.createElement('div');
+        card.className = 'ig-bottom-line-card';
+        card.innerHTML = `<div class="ig-bottom-line-icon">\u{1F4CA}</div><div>${marked.parse(b.markdown)}</div>`;
+        body.appendChild(card);
+        hasBottomLine = true;
+      }
+    }
+    // Fallback: extract "**The bottom line:**" or "**Bottom line:**" from raw markdown
+    if (!hasBottomLine) {
+      const blMatch = md.match(/\*\*(?:The\s+)?(?:bottom\s+line|strategic\s+headline)[:\s]*\*\*\s*(.+?)(?:\n\n|\n---)/is);
+      if (blMatch) {
+        const card = document.createElement('div');
+        card.className = 'ig-bottom-line-card';
+        card.innerHTML = `<div class="ig-bottom-line-icon">\u{1F4CA}</div><div><p>${marked.parse(blMatch[1].trim())}</p></div>`;
+        body.appendChild(card);
+      }
+    }
+
+    // KPI extraction
+    const kpis = extractKPIs(md);
+    if (kpis.length > 0) {
+      const row = document.createElement('div');
+      row.className = 'ig-kpi-row';
+      const icons = { 'Rating': '\u2B50', 'Sites': '\u{1F3E5}', 'Threat': '\u26A0\uFE0F', 'Systems': '\u{1F3E2}', 'Reviews': '\u{1F4AC}', 'Commercial': '\u{1F4B5}', 'Population': '\u{1F465}' };
+      kpis.forEach(k => {
+        const tile = document.createElement('div');
+        tile.className = 'ig-kpi';
+        tile.innerHTML = `<div class="ig-kpi-icon">${icons[k.label] || '\u{1F4CA}'}</div>
+          <div><div class="ig-kpi-label">${k.label}</div><div class="ig-kpi-value">${k.value}</div>
+          ${k.detail ? `<div class="ig-kpi-detail">${k.detail}</div>` : ''}</div>`;
+        row.appendChild(tile);
+      });
+      body.appendChild(row);
+    }
+
+    // Charts from tables
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = marked.parse(md);
+    const tables = tempDiv.querySelectorAll('table');
+    tables.forEach(tbl => {
+      const chartData = extractChartData(tbl);
+      if (chartData) {
+        const card = document.createElement('div');
+        card.className = 'ig-chart-card';
+        card.innerHTML = `<h3>${chartData.title}</h3>`;
+        const canvas = document.createElement('canvas');
+        card.appendChild(canvas);
+        body.appendChild(card);
+        const ctx = canvas.getContext('2d');
+        const chart = new Chart(ctx, chartData.config);
+        igCharts.push(chart);
+      }
+    });
+
+    // Render all blocks
+    for (const b of parsed.blocks) {
+      if (b.type === 'bottom_line') continue; // already rendered
+
+      if (b.type === 'callout') {
+        const el = document.createElement('div');
+        el.className = 'ig-strategic';
+        el.innerHTML = `<div class="ig-strategic-icon">\u{1F3AF}</div><div><h3>${b.title || 'Strategic Implication'}</h3>${marked.parse(b.markdown)}</div>`;
+        body.appendChild(el);
+      } else if (b.type === 'findings') {
+        const el = document.createElement('div');
+        el.className = 'ig-section';
+        el.innerHTML = `<div class="ig-section-title">${b.title || 'Key Findings'}</div>`;
+        const tmp = document.createElement('div');
+        tmp.innerHTML = marked.parse(b.markdown);
+        let num = 1;
+        tmp.querySelectorAll('li').forEach(li => {
+          const card = document.createElement('div');
+          card.className = 'ig-finding';
+          card.innerHTML = `<div class="ig-finding-num">${num++}</div><p>${li.innerHTML}</p>`;
+          el.appendChild(card);
+        });
+        if (num === 1) { el.innerHTML += marked.parse(b.markdown); }
+        body.appendChild(el);
+      } else if (b.type === 'sources') {
+        const el = document.createElement('div');
+        el.className = 'ig-sources';
+        el.innerHTML = '<span class="ig-sources-label">Sources</span>';
+        const tmp = document.createElement('div');
+        tmp.innerHTML = marked.parse(b.markdown);
+        const srcIcons = { yext: '\u{1F4CD}', google: '\u{1F50D}', census: '\u{1F3DB}', cdc: '\u{1FA7A}', firecrawl: '\u{1F310}', outscraper: '\u{1F50D}', distance: '\u{1F697}', geocod: '\u{1F4CD}' };
+        tmp.querySelectorAll('li').forEach(li => {
+          const txt = li.textContent;
+          let icon = '\u{1F4C4}';
+          for (const [k, v] of Object.entries(srcIcons)) { if (txt.toLowerCase().includes(k)) { icon = v; break; } }
+          const colon = txt.indexOf(':');
+          const label = colon > 0 ? txt.substring(0, colon).trim() : txt;
+          const detail = colon > 0 ? txt.substring(colon + 1).trim() : '';
+          const pill = document.createElement('div');
+          pill.className = 'source-pill';
+          pill.innerHTML = `<div class="source-icon">${icon}</div><div><b>${label}</b>${detail ? `<span class="source-detail">${detail}</span>` : ''}</div>`;
+          el.appendChild(pill);
+        });
+        body.appendChild(el);
+      } else {
+        const el = document.createElement('div');
+        el.className = 'ig-section';
+        if (b.title) el.innerHTML = `<div class="ig-section-title">${b.title}</div>`;
+        const content = document.createElement('div');
+        content.innerHTML = marked.parse(b.markdown);
+        if (window._enhanceRenderedHTML) window._enhanceRenderedHTML(content);
+        el.appendChild(content);
+        body.appendChild(el);
+      }
+    }
+
+    overlay.classList.add('active');
+    document.body.style.overflow = 'hidden';
+    document.addEventListener('keydown', igEscHandler);
+  }
+
+  function closeInfographic() {
+    const overlay = document.getElementById('ig-overlay');
+    if (overlay) overlay.classList.remove('active');
+    document.body.style.overflow = '';
+    document.removeEventListener('keydown', igEscHandler);
+    igCharts.forEach(c => c.destroy()); igCharts = [];
+  }
+
+  function igEscHandler(e) { if (e.key === 'Escape') closeInfographic(); }
+
+  function extractKPIs(md) {
+    const kpis = [];
+    // Star rating
+    const starMatch = md.match(/(\d\.\d)\s*stars?/i);
+    if (starMatch) kpis.push({ label: 'Rating', value: starMatch[1], detail: 'Top rated' });
+    // BH sites
+    const siteMatch = md.match(/(\d+)\s*(BH\s*)?(locations?|facilities|sites|access\s*points)/i);
+    if (siteMatch) kpis.push({ label: 'Sites', value: siteMatch[1], detail: 'BH locations' });
+    // Threat
+    const threatMatch = md.match(/\*\*?(HIGH|MED|LOW)\*\*?/i);
+    if (threatMatch) kpis.push({ label: 'Threat', value: threatMatch[1].toUpperCase(), detail: 'Top threat level' });
+    // Competitor systems count
+    const sysMatches = md.match(/\|\s*\*\*?[^|]+\*\*?\s*\|\s*(HCA|UHealth|Jackson|Memorial|Cleveland|Mount Sinai|Broward Health|Nicklaus|Larkin|UHS|CHS|Keralty|Sanitas)/gi);
+    if (sysMatches) kpis.push({ label: 'Systems', value: new Set(sysMatches.map(m => m.match(/(HCA|UHealth|Jackson|Memorial|Cleveland|Mount Sinai|Broward Health|Nicklaus|Larkin|UHS|CHS|Keralty|Sanitas)/i)?.[1])).size, detail: 'Competitor systems' });
+    // Reviews
+    const revMatches = md.match(/([\d,]+)\s*reviews?/gi);
+    if (revMatches) {
+      const nums = revMatches.map(r => parseInt(r.replace(/,/g, '').match(/\d+/)[0]));
+      kpis.push({ label: 'Reviews', value: Math.max(...nums).toLocaleString(), detail: 'Peak review volume' });
+    }
+    // Commercial %
+    const commMatch = md.match(/(\d{1,2}\.\d)%.*commercial/i) || md.match(/commercial.*?(\d{1,2}\.\d)%/i);
+    if (commMatch) kpis.push({ label: 'Commercial', value: commMatch[1] + '%', detail: 'Commercially insured' });
+    return kpis;
+  }
+
+  function extractChartData(table) {
+    const headers = Array.from(table.querySelectorAll('th')).map(th => th.textContent.trim().toLowerCase());
+    const rows = Array.from(table.querySelectorAll('tbody tr'));
+    if (rows.length === 0) return null;
+
+    const nameCol = headers.findIndex(h => /facility|location|provider|name|oced/i.test(h));
+    const starsCol = headers.findIndex(h => /stars?|rating/i.test(h));
+    const reviewsCol = headers.findIndex(h => /reviews?/i.test(h));
+    const threatCol = headers.findIndex(h => /threat/i.test(h));
+
+    // Ratings bar chart
+    if (nameCol >= 0 && starsCol >= 0) {
+      const labels = []; const values = []; const colors = [];
+      rows.forEach(tr => {
+        const cells = tr.querySelectorAll('td');
+        if (cells.length <= Math.max(nameCol, starsCol)) return;
+        const name = cells[nameCol].textContent.trim().substring(0, 30);
+        const val = parseFloat(cells[starsCol].textContent.replace(/[^\d.]/g, ''));
+        if (!isNaN(val) && name) {
+          labels.push(name);
+          values.push(val);
+          const isBH = /baptist|BH\b/i.test(name);
+          colors.push(isBH ? '#159947' : '#667085');
+        }
+      });
+      if (labels.length >= 4) {
+        return {
+          title: 'Competitor Ratings Comparison',
+          config: {
+            type: 'bar',
+            data: { labels, datasets: [{ data: values, backgroundColor: colors, borderRadius: 6, barThickness: 28 }] },
+            options: {
+              indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+              plugins: { legend: { display: false }, datalabels: false,
+                tooltip: { callbacks: { label: ctx => ctx.raw + ' stars' } }
+              },
+              scales: {
+                x: { min: 0, max: 5, grid: { display: false }, ticks: { stepSize: 1 } },
+                y: { grid: { display: false }, ticks: { font: { size: 11, weight: 600 } } }
+              }
+            }
+          }
+        };
+      }
+    }
+
+    // Threat donut
+    if (threatCol >= 0) {
+      let high = 0, med = 0, low = 0;
+      rows.forEach(tr => {
+        const cells = tr.querySelectorAll('td');
+        if (cells.length <= threatCol) return;
+        const t = cells[threatCol].textContent.trim().toUpperCase();
+        if (t.includes('HIGH')) high++;
+        else if (t.includes('MED')) med++;
+        else if (t.includes('LOW')) low++;
+      });
+      if (high + med + low >= 2) {
+        return {
+          title: 'Threat Level Distribution',
+          config: {
+            type: 'doughnut',
+            data: {
+              labels: ['High', 'Medium', 'Low'],
+              datasets: [{ data: [high, med, low], backgroundColor: ['#b42318', '#d9930e', '#137333'], borderWidth: 0, spacing: 2 }]
+            },
+            options: {
+              responsive: true, maintainAspectRatio: true,
+              cutout: '60%',
+              plugins: {
+                legend: { position: 'bottom', labels: { padding: 16, font: { size: 12, weight: 600 } } }
+              }
+            }
+          }
+        };
+      }
+    }
+    return null;
   }
 
 </script>

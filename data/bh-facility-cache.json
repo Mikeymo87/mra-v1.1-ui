@@ -4454,7 +4454,7 @@
       "accountId": "7671447102894087885",
       "uid": "13222307",
       "id": "1338f1b4-05f2-4cff-866c-00e9974feedf",
-      "timestamp": "2026-05-07T15:23:17",
+      "timestamp": "2026-05-12T22:00:36",
       "createdTimestamp": "2019-06-28T21:08:33",
       "labels": [
         "ggattr"
@@ -7560,7 +7560,7 @@
   {
     "address": {
       "line1": "1150 Campo Sano Ave.",
-      "line2": "Floors 1 & 2",
+      "line2": "Floors 1",
       "city": "Coral Gables",
       "region": "FL",
       "postalCode": "33146",
@@ -7576,7 +7576,7 @@
       "accountId": "7671447102894087885",
       "uid": "96873430",
       "id": "e9318b00-a5c4-4d0d-ba19-22633b71497c",
-      "timestamp": "2026-05-07T15:00:58",
+      "timestamp": "2026-05-12T19:40:35",
       "createdTimestamp": "2023-04-25T16:25:38",
       "labels": [
         "ggattr"
@@ -12375,7 +12375,7 @@
       "accountId": "7671447102894087885",
       "uid": "2047057870",
       "id": "3760793786624794993",
-      "timestamp": "2026-05-07T14:18:10",
+      "timestamp": "2026-05-13T15:22:59",
       "createdTimestamp": "2026-02-17T20:02:41",
       "folderId": "primaryCare",
       "schemaTypes": [
@@ -12649,56 +12649,6 @@
       "postalCode": "33040",
       "countryCode": "US"
     },
-    "name": "Baptist Health Orthopedic Care | Key West - Virtual Care",
-    "geocodedCoordinate": {
-      "latitude": 24.5668873,
-      "longitude": -81.76657019999999
-    },
-    "meta": {
-      "accountId": "7671447102894087885",
-      "uid": "2058265284",
-      "id": "8b3f1a6d-5c7e-4d92-9a4b-2c6f1e8d7a35",
-      "timestamp": "2026-04-15T00:44:53",
-      "createdTimestamp": "2026-04-14T22:19:21",
-      "folderId": "0",
-      "language": "en",
-      "countryCode": "US",
-      "entityType": "healthcareFacility"
-    }
-  },
-  {
-    "address": {
-      "line1": "3136 Northside Drive",
-      "city": "Key West",
-      "region": "FL",
-      "postalCode": "33040",
-      "countryCode": "US"
-    },
-    "name": "Baptist Health Orthopedic Care | Key West",
-    "geocodedCoordinate": {
-      "latitude": 24.5668873,
-      "longitude": -81.76657019999999
-    },
-    "meta": {
-      "accountId": "7671447102894087885",
-      "uid": "2058265285",
-      "id": "c1d4e9a7-6b2f-43c8-8a1d-7f5e3b2c9a60",
-      "timestamp": "2026-04-15T00:55:35",
-      "createdTimestamp": "2026-04-14T22:19:21",
-      "folderId": "0",
-      "language": "en",
-      "countryCode": "US",
-      "entityType": "healthcareFacility"
-    }
-  },
-  {
-    "address": {
-      "line1": "3136 Northside Drive",
-      "city": "Key West",
-      "region": "FL",
-      "postalCode": "33040",
-      "countryCode": "US"
-    },
     "name": "Baptist Health Brain & Spine Care | Key West",
     "geocodedCoordinate": {
       "latitude": 24.5668873,
@@ -12852,7 +12802,7 @@
       "postalCode": "33040",
       "countryCode": "US"
     },
-    "name": "Baptist Health Orthopedics | Key West",
+    "name": "Baptist Health Orthopedic Care | Key West",
     "geocodedCoordinate": {
       "latitude": 24.5668873,
       "longitude": -81.76657019999999
@@ -12861,7 +12811,7 @@
       "accountId": "7671447102894087885",
       "uid": "2059220342",
       "id": "399227700828117109",
-      "timestamp": "2026-04-21T23:07:56",
+      "timestamp": "2026-05-14T14:41:52",
       "createdTimestamp": "2026-04-21T19:16:53",
       "folderId": "0",
       "language": "en",
@@ -12938,8 +12888,84 @@
       "accountId": "7671447102894087885",
       "uid": "2062151824",
       "id": "6857760242192581466",
-      "timestamp": "2026-05-08T18:18:43",
+      "timestamp": "2026-05-11T20:30:21",
       "createdTimestamp": "2026-05-08T18:16:29",
+      "folderId": "0",
+      "language": "en",
+      "countryCode": "US",
+      "entityType": "healthcareFacility"
+    }
+  },
+  {
+    "address": {
+      "line1": "8950 North Kendall Drive",
+      "line2": "Suite 508W",
+      "city": "Kendall",
+      "region": "FL",
+      "postalCode": "33176",
+      "countryCode": "US"
+    },
+    "name": "Heart & Vascular Diagnostic Imaging | Kendall (508W)",
+    "geocodedCoordinate": {
+      "latitude": 25.683981,
+      "longitude": -80.34029400000001
+    },
+    "meta": {
+      "accountId": "7671447102894087885",
+      "uid": "2062930977",
+      "id": "6031402549741060751",
+      "timestamp": "2026-05-13T16:14:31",
+      "createdTimestamp": "2026-05-13T14:57:13",
+      "folderId": "0",
+      "language": "en",
+      "countryCode": "US",
+      "entityType": "healthcareFacility"
+    }
+  },
+  {
+    "address": {
+      "line1": "3136 Northside Dr., Second Floor",
+      "city": "Key West",
+      "region": "FL",
+      "postalCode": "33040",
+      "countryCode": "US"
+    },
+    "name": "f - Virtual Care",
+    "geocodedCoordinate": {
+      "latitude": 24.5668873,
+      "longitude": -81.76657019999999
+    },
+    "meta": {
+      "accountId": "7671447102894087885",
+      "uid": "2062961072",
+      "id": "3437946787638024883",
+      "timestamp": "2026-05-14T14:42:09",
+      "createdTimestamp": "2026-05-13T19:16:34",
+      "folderId": "0",
+      "language": "en",
+      "countryCode": "US",
+      "entityType": "healthcareFacility"
+    }
+  },
+  {
+    "address": {
+      "line1": "8950 North Kendall Drive",
+      "city": "Miami",
+      "region": "FL",
+      "postalCode": "33176",
+      "countryCode": "US"
+    },
+    "name": "Heart & Vascular Diagnostic Imaging | Kendall (508W) - Virtual Care",
+    "geocodedCoordinate": {
+      "latitude": 25.6839373,
+      "longitude": -80.3403405
+    },
+    "meta": {
+      "accountId": "7671447102894087885",
+      "uid": "2062961883",
+      "id": "2824709807073802347",
+      "timestamp": "2026-05-14T00:16:38",
+      "createdTimestamp": "2026-05-13T20:12:23",
       "folderId": "0",
       "language": "en",
       "countryCode": "US",

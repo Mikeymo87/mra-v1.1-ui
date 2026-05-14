@@ -9,7 +9,7 @@ Baptist Health South Florida Market Research Agent. A Claude Sonnet-powered chat
 - `prompts/` — Modular prompt directory (core, reference-data, 7 workflows + intercept-writer)
 - `public/index.html` — Chat UI with SSE streaming, markdown rendering, cache-clear-on-refresh
 - `MRA-CAPABILITIES.md` — Handoff doc for Marketing Plan GPT
-- `.env` — 7 API keys (ANTHROPIC, YEXT, CENSUS, OPENAI, GOOGLE_MAPS, OUTSCRAPER, ORS) — never commit
+- `.env` — API keys (ANTHROPIC, YEXT, CENSUS, OPENAI, GOOGLE_MAPS, DATAFORSEO_LOGIN, DATAFORSEO_PASSWORD, ORS) — never commit
 
 ## Running
 ```
@@ -30,7 +30,7 @@ cd ~/Desktop/Claude/MRA-v1.1-UI && node server.js
 5. Geocode Address (Google) — MUST include city name (duplicate addresses in SoFla)
 6. Calculate Drive Times (Google Distance Matrix) — flattened response, 10 destinations max per call
 7. Competitor Ratings (Google Places Text Search)
-8. Google Reviews Deep Pull (Outscraper)
+8. Google Reviews Report (DataForSEO) — server-side analysis, name extraction, CSV generation
 9. Drive Time Isochrone (OpenRouteService)
 10. Baptist Health Physician Lookup (Yext) — 7,569 physicians, filter: `c_listOfSpecialties` + `address.city`
 

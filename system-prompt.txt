@@ -232,6 +232,8 @@ WEB RESEARCH ACCURACY RULES:
 2. CROSS-REFERENCE: After compiling competitor locations from Google Places, verify key facilities against the competitor's official website via read_page. If a location does not have its own page on the official site, flag it as "unverified — Google Places only."
 3. COMPLETENESS CHECK: After building a competitor location list, do one final web_research query: "[Competitor] total number of locations [state/region]" to sanity-check your count against their own published numbers. If your count differs significantly, investigate.
 4. TIMELINE CONTEXT: When citing expansions, new facilities, or market developments, always include the announced date, approval date, and expected completion date if available. Do not present future projects as current reality.
+5. FRESHNESS CHECK: When reading a competitor's location page, check for "closed," "temporarily closed," or "coming soon" markers. Do not cite closed or future facilities as current competition. If a Google Places result has no reviews and no website, flag it as "unverified."
+6. CONFLICT RESOLUTION: If Google Places and a competitor's official website disagree on facility count or locations, prioritize the official website. Report the discrepancy if significant (e.g., "Google Places shows 12 HCA locations; HCA's website lists 10 — 2 may be closed or rebranded").
 
 TOOLS:
 - Baptist Health Location Lookup — live Yext data by care type (includes geocodedCoordinate lat/lng)
@@ -241,13 +243,13 @@ TOOLS:
 - Geocode Address — address to lat/lng (Google Geocoding)
 - Calculate Drive Times — drive time/distance (Google Distance Matrix)
 - Competitor Ratings and Reviews — Google Places API for QUICK rating snapshots (stars, review count, top 5 reviews). NOT for deep analysis.
-- Google Reviews Deep Pull — Outscraper API. Full review data with dates, text, business responses. Supports batch (10 locations), date filtering, up to 100 reviews/location. Use for sentiment analysis, name extraction, theme analysis, export, date-filtered pulls.
+- Google Reviews Report — DataForSEO API. Server fetches reviews, pre-computes stats (names mentioned, themes, sentiment), generates downloadable CSV, and returns ALL full review text for you to read and analyze. Up to 4,490 reviews per location. Use for any review-related question — build reports, find patterns, identify staff by name, compare time periods.
 - Drive Time Isochrone — OpenRouteService API. Drive-time polygons as GeoJSON at 5/10/15/20 min intervals.
 - One Medical Location Lookup — local data. 7 One Medical (Amazon) primary care clinics in Miami-Dade & Broward. Includes lat/lng, address, partnership intel. Use for referral corridor analysis with BH facilities.
 
-WHEN TO USE DEEP PULL vs QUICK RATINGS:
+WHEN TO USE REVIEW REPORT vs QUICK RATINGS:
 - Quick check (star rating, count, comparison) → Competitor Ratings (Google Places)
-- Review text, sentiment, names, themes, dates, export → Google Reviews Deep Pull (Outscraper)
+- Review text, sentiment, names, themes, dates, CSV export → Google Reviews Report (DataForSEO). Server returns stats PLUS full review text. Read the reviews to answer any user question — build custom reports, find specific complaints, identify staff.
 
 PAYER MIX WORKFLOW:
 CALL 1 — Data Profiles (/acs/acs5/profile): DP03_0097E/PE (private/commercial), DP03_0099E/PE (uninsured).

@@ -410,7 +410,7 @@ const tools = [
   },
   {
     name: 'competitor_ratings_reviews',
-    description: 'Google Places Text Search for QUICK competitor rating snapshots (stars, review count, address, place_id). NOT for full review text — use google_reviews_deep_pull for that.',
+    description: 'Google Places Text Search for QUICK competitor rating snapshots (stars, review count, address, place_id). NOT for full review text — use google_reviews_report for that.',
     input_schema: {
       type: 'object',
       properties: {
@@ -420,14 +420,14 @@ const tools = [
     }
   },
   {
-    name: 'google_reviews_deep_pull',
-    description: 'Outscraper API for full review data with dates, text, business responses. Supports batch (10 locations), date filtering, up to 100 reviews/location.',
+    name: 'google_reviews_report',
+    description: 'Fetches Google Reviews via DataForSEO. Server pulls reviews, pre-computes stats (names mentioned, themes, sentiment), generates downloadable CSV, and returns ALL full review text for you to read and analyze. You get metadata (stats, names, themes) plus every review with date, rating, author, and full text. Use this data to answer any question about reviews — build reports, find patterns, identify staff by name, compare time periods. For BH review reports and CSVs, always set include_csv=true.',
     input_schema: {
       type: 'object',
       properties: {
-        query: { type: 'string', description: 'URL-encoded location query. For batch use %0A between locations (max 10).' },
-        reviewsLimit: { type: 'number', description: 'Number of reviews per location. 20 for quick check, 50 for analysis, 100 for deep dive.' },
-        cutoff: { type: 'string', description: 'Optional Unix timestamp to filter reviews newer than date.' }
+        query: { type: 'string', description: 'Business name or Google Maps query. For multiple locations, call this tool once per location.' },
+        reviewsLimit: { type: 'number', description: 'Number of reviews to pull, sorted newest first. 200=standard, 500=deep dive, 1000+=large report, 4490=max. Every review includes its date. When user asks for a time period like "last 6 months", pull enough to cover that window (e.g. 1000+ for a busy location). When user asks for a specific count like "last 500 reviews", use that number.' },
+        include_csv: { type: 'boolean', description: 'Generate downloadable CSV. Default true for 10+ reviews.' }
       },
       required: ['query', 'reviewsLimit']
     }
@@ -915,7 +915,7 @@ function compressToolResult(toolName, fullContent) {
   return fullContent.substring(0, MAX_SUMMARY);
 }
 
-async function executeTool(name, input) {
+async function executeTool(name, input, progressCb) {
   const timestamp = new Date().toISOString();
   let url, res, data, source;
 
@@ -1237,18 +1237,34 @@ async function executeTool(name, input) {
         });
       }
 
-      case 'google_reviews_deep_pull': {
-        let reviewUrl = `https://api.app.outscraper.com/maps/reviews-v3?sort=newest&language=en&async=false&reviewsLimit=${input.reviewsLimit}&query=${input.query}`;
-        if (input.cutoff) reviewUrl += `&cutoff=${input.cutoff}`;
-        url = reviewUrl;
-        source = 'Outscraper Maps Reviews API';
-        res = await fetchWithTimeout(url, {
-          headers: { 'X-API-Key': process.env.OUTSCRAPER_API_KEY }
-        }, 90000);
-        data = await res.json();
-        return envelope(source, url.replace(process.env.OUTSCRAPER_API_KEY, '[KEY]'), timestamp, data, {
-          query: { location: input.query, reviewsLimit: input.reviewsLimit }
-        });
+      case 'google_reviews_report': {
+        const { executeReviewsReport } = require('./reviews-skill');
+        source = 'DataForSEO Google Reviews + Server Analysis';
+        try {
+          const fullResult = await executeReviewsReport(input, (progress) => {
+            if (progressCb) progressCb(progress.message || 'Analyzing reviews...');
+          });
+          // Reviews get full context — no 50K truncation.
+          // Separate metadata from reviews so Claude gets stats upfront, then all reviews.
+          const { reviews, csv_download_url, ...metadata } = fullResult;
+          return {
+            _source: { api: source, url: 'DataForSEO reviews API', retrieved_at: timestamp },
+            status: reviews?.length > 0 ? 'success' : 'empty',
+            result_count: reviews?.length || 0,
+            warnings: [],
+            query: { location: input.query, reviewsLimit: input.reviewsLimit },
+            metadata,
+            reviews,
+            // Sent as SSE event to frontend — renders download button in chat
+            _csvDownload: csv_download_url ? {
+              url: csv_download_url,
+              location: fullResult.location_name,
+              count: reviews?.length || 0
+            } : null
+          };
+        } catch (err) {
+          return envelope(source, 'DataForSEO reviews API', timestamp, { error: err.message });
+        }
       }
 
       case 'drive_time_isochrone': {
@@ -1572,7 +1588,7 @@ function humanizeToolCall(toolName, input) {
     'web_research': 'Searching the web',
     'read_page': 'Reading page content',
     'drive_time_isochrone': 'Generating drive-time polygon',
-    'google_reviews_deep_pull': 'Pulling Google reviews',
+    'google_reviews_report': 'Analyzing Google reviews',
     'one_medical_location_lookup': 'Checking One Medical locations',
     'generate_choropleth_map': 'Generating heat map',
     'resolve_bh_facility': 'Resolving facility',
@@ -1698,6 +1714,27 @@ async function runAgentLoop(sessionId, userMessage, res) {
   while (iterations < MAX_ITERATIONS) {
     iterations++;
 
+    // Validate message structure before API call
+    for (let mi = 0; mi < session.messages.length; mi++) {
+      const msg = session.messages[mi];
+      if (msg.role === 'assistant' && Array.isArray(msg.content)) {
+        const tuIds = msg.content.filter(b => b.type === 'tool_use').map(b => b.id);
+        if (tuIds.length > 0) {
+          const next = session.messages[mi + 1];
+          if (!next || next.role !== 'user' || !Array.isArray(next.content)) {
+            console.error(`[MsgValidation] messages[${mi}] has ${tuIds.length} tool_use but no tool_result follows!`);
+          } else {
+            const trIds = next.content.filter(b => b.type === 'tool_result').map(b => b.tool_use_id);
+            const missing = tuIds.filter(id => !trIds.includes(id));
+            if (missing.length > 0) {
+              console.error(`[MsgValidation] messages[${mi}] tool_use IDs missing results: ${missing.join(', ')}`);
+            }
+          }
+        }
+      }
+    }
+    console.log(`[Agent] Iteration ${iterations}: ${session.messages.length} messages, roles: [${session.messages.map(m => m.role).join(', ')}]`);
+
     const stream = anthropic.messages.stream({
       model: 'claude-sonnet-4-6',
       max_tokens: 8192,
@@ -1726,10 +1763,10 @@ async function runAgentLoop(sessionId, userMessage, res) {
       }
     }
 
-    session.messages.push({ role: 'assistant', content: assistantContent });
+    // Deep-clone assistant content to prevent SDK reference invalidation on next stream
+    session.messages.push({ role: 'assistant', content: JSON.parse(JSON.stringify(assistantContent)) });
 
     // Handle max_tokens truncation — the model ran out of output space.
-    // Ask it to continue instead of silently dropping the analysis.
     if (response.stop_reason === 'max_tokens' && toolCalls.length === 0) {
       console.warn(`[Agent] Hit max_tokens (8192) on iteration ${iterations}. Requesting continuation...`);
       session.messages.push({ role: 'user', content: 'Your response was cut off. Please continue where you left off — deliver the analysis with tables and data.' });
@@ -1739,6 +1776,11 @@ async function runAgentLoop(sessionId, userMessage, res) {
     if (response.stop_reason === 'end_of_turn' || toolCalls.length === 0) {
       fullText = textParts.join('');
       break;
+    }
+
+    // If max_tokens hit mid-tool-generation, log it — tools that DID parse will still execute
+    if (response.stop_reason === 'max_tokens' && toolCalls.length > 0) {
+      console.warn(`[Agent] Hit max_tokens with ${toolCalls.length} tool call(s) parsed. Executing available tools.`);
     }
 
     // Execute tool calls with progress tracking
@@ -1757,7 +1799,12 @@ async function runAgentLoop(sessionId, userMessage, res) {
       console.log(`[Agent] Tool call: ${toolCall.name}`, JSON.stringify(toolCall.input).substring(0, 200));
 
       const t0 = Date.now();
-      const result = await executeTool(toolCall.name, toolCall.input);
+      const result = await executeTool(toolCall.name, toolCall.input, (progressMsg) => {
+        sendSSE(res, 'status', {
+          tool: toolCall.name, step: totalSteps + i + 1, total: totalSteps + toolCalls.length,
+          phase: 'progress', label: progressMsg
+        });
+      });
       const duration = Date.now() - t0;
       // Strip _rawData before sending to model (it's only for geo accumulation)
       const { _rawData, ...resultForModel } = result;
@@ -1779,6 +1826,12 @@ async function runAgentLoop(sessionId, userMessage, res) {
       // Send map commands directly to client
       if (result._mapCommand || toolCall.name === 'map_control') {
         sendSSE(res, 'map_command', result.data || result);
+      }
+
+      // Send CSV download button to frontend
+      if (result._csvDownload) {
+        sendSSE(res, 'csv_ready', result._csvDownload);
+        delete result._csvDownload; // don't send to model
       }
 
       // Accumulate choropleth data if this was a heat map tool call
@@ -2400,6 +2453,23 @@ app.get('/api/newsletter-file/:filename', (req, res) => {
   res.setHeader('Content-Type', 'text/html');
   res.sendFile(filePath);
 });
+
+// ── Reviews CSV download endpoint ──────────────────────────────────────────
+app.get('/api/reviews/:filename', (req, res) => {
+  const filename = req.params.filename;
+  // Sanitize: only allow alphanumeric, hyphens, underscores, dots
+  if (!/^[\w\-\.]+\.csv$/.test(filename)) return res.status(400).json({ error: 'Invalid filename' });
+  const filePath = path.join(__dirname, 'data', 'reviews', filename);
+  if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'CSV not found. It may have been cleaned up (files expire after 7 days).' });
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.sendFile(filePath);
+});
+
+// ── Reviews CSV cleanup (every 24h, delete files older than 7 days) ───────
+setInterval(() => {
+  try { require('./reviews-skill').cleanupOldCSVs(7); } catch (e) {}
+}, 24 * 60 * 60 * 1000);
 
 // ── Built-in Newsletter Cron ────────────────────────────────────────────────
 // Generates newsletter every other Sunday at 10 PM ET.
