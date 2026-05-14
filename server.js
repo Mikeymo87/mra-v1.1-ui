@@ -421,7 +421,7 @@ const tools = [
   },
   {
     name: 'google_reviews_report',
-    description: 'Fetches Google Reviews via DataForSEO. Server pulls reviews, pre-computes stats (names mentioned, themes, sentiment), generates downloadable CSV, and returns ALL full review text for you to read and analyze. You get metadata (stats, names, themes) plus every review with date, rating, author, and full text. Use this data to answer any question about reviews — build reports, find patterns, identify staff by name, compare time periods. For BH review reports and CSVs, always set include_csv=true.',
+    description: 'Fetches Google Reviews via DataForSEO. Server pulls reviews, pre-computes stats (names mentioned, themes, sentiment), generates downloadable CSV, and returns ALL full review text for you to read and analyze. You get metadata (stats, names, themes) plus every review with date, rating, author, and full text. Use this data to answer any question about reviews — build reports, find patterns, identify staff by name, compare time periods. For BH review reports and CSVs, always set include_csv=true. IMPORTANT: Do NOT include CSV download links or paths in your response — the UI renders a download button automatically.',
     input_schema: {
       type: 'object',
       properties: {
