@@ -626,6 +626,9 @@ async function executeReviewsReport(input, progressCb) {
 
   if (fromCache) fullResult.cache_status = `Served from cache (${reviews.length} total cached)`;
 
+  // Include place_id for report generation
+  fullResult._place_id = place.place_id;
+
   return fullResult;
 }
 
@@ -643,4 +646,4 @@ function cleanupOldCSVs(maxAgeDays = 7) {
   }
 }
 
-module.exports = { executeReviewsReport, cleanupOldCSVs, parseDateFilter, extractMentionedNames, analyzeThemes };
+module.exports = { executeReviewsReport, cleanupOldCSVs, parseDateFilter, extractMentionedNames, analyzeThemes, computeStats };

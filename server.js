@@ -1246,7 +1246,7 @@ async function executeTool(name, input, progressCb) {
           });
           // Reviews get full context — no 50K truncation.
           // Separate metadata from reviews so Claude gets stats upfront, then all reviews.
-          const { reviews, csv_download_url, ...metadata } = fullResult;
+          const { reviews, csv_download_url, _place_id, ...metadata } = fullResult;
           return {
             _source: { api: source, url: 'DataForSEO reviews API', retrieved_at: timestamp },
             status: reviews?.length > 0 ? 'success' : 'empty',
@@ -1255,9 +1255,10 @@ async function executeTool(name, input, progressCb) {
             query: { location: input.query, reviewsLimit: input.reviewsLimit },
             metadata,
             reviews,
-            // Sent as SSE event to frontend — renders download button in chat
+            // Sent as SSE event to frontend — renders download buttons in chat
             _csvDownload: csv_download_url ? {
               url: csv_download_url,
+              reportUrl: _place_id ? `/api/review-report/${_place_id}` : null,
               location: fullResult.location_name,
               count: reviews?.length || 0
             } : null
@@ -2455,6 +2456,48 @@ app.get('/api/newsletter-file/:filename', (req, res) => {
   if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File not found' });
   res.setHeader('Content-Type', 'text/html');
   res.sendFile(filePath);
+});
+
+// ── Review Report endpoint (branded HTML from cache) ──────────────────────
+app.get('/api/review-report/:placeId', (req, res) => {
+  const placeId = req.params.placeId;
+  const cacheFile = path.join(__dirname, 'data', 'reviews-cache', placeId.replace(/[^a-zA-Z0-9]/g, '_') + '.json');
+  if (!fs.existsSync(cacheFile)) return res.status(404).json({ error: 'No cached reviews for this location. Pull reviews first.' });
+
+  try {
+    const cached = JSON.parse(fs.readFileSync(cacheFile, 'utf-8'));
+    const { extractMentionedNames, analyzeThemes, computeStats } = require('./reviews-skill');
+    const { generateReviewReportHTML } = require('./review-report-template');
+
+    const reviews = cached.reviews || [];
+    const names = extractMentionedNames(reviews);
+    const themes = analyzeThemes(reviews);
+    const stats = computeStats(reviews);
+
+    const html = generateReviewReportHTML({
+      location_name: cached.location_name,
+      address: reviews[0]?.address || '',
+      total_reviews_analyzed: reviews.length,
+      total_reviews_available: cached.review_count,
+      avg_rating: stats.avg_rating,
+      rating_distribution: stats.rating_distribution,
+      date_range: stats.date_range,
+      response_rate: {
+        responded: stats.total_with_owner_response,
+        unresponded: stats.total_without_response,
+        pct: stats.pct_responded
+      },
+      mentioned_names: names,
+      top_themes: themes,
+      sentiment_breakdown: stats.sentiment_breakdown,
+      reviews
+    });
+
+    res.setHeader('Content-Type', 'text/html');
+    res.send(html);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ── Reviews CSV download endpoint ──────────────────────────────────────────
