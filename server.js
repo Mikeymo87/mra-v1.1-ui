@@ -40,6 +40,14 @@ function checkRateLimit(sessionId) {
   return entry.count <= RATE_LIMIT;
 }
 
+// Cleanup stale rate limit entries every 30 min
+setInterval(() => {
+  const now = Date.now();
+  for (const [id, entry] of rateLimits) {
+    if (now - entry.windowStart > RATE_WINDOW) rateLimits.delete(id);
+  }
+}, 30 * 60 * 1000);
+
 // ── Config ──────────────────────────────────────────────────────────────────
 const anthropic = new Anthropic.default({ apiKey: process.env.ANTHROPIC_API_KEY });
 const sessions = new Map();
@@ -915,7 +923,7 @@ function compressToolResult(toolName, fullContent) {
   return fullContent.substring(0, MAX_SUMMARY);
 }
 
-async function executeTool(name, input, progressCb) {
+async function executeTool(name, input, progressCb, ctx) {
   const timestamp = new Date().toISOString();
   let url, res, data, source;
 
@@ -939,19 +947,19 @@ async function executeTool(name, input, progressCb) {
         }
 
         // Distance pre-filter: if we have origin coords, keep only nearby results
-        if (executeTool._originCoords && entities.length > 5) {
+        if (ctx.originCoords && entities.length > 5) {
           const maxMiles = 25;
           const before = entities.length;
           // Add distance to each entity for sorting
           entities = entities.map(e => {
             const lat = e.geocodedCoordinate?.latitude;
             const lon = e.geocodedCoordinate?.longitude;
-            e._distMiles = (lat && lon) ? haversineDistance(executeTool._originCoords.lat, executeTool._originCoords.lng, lat, lon) : 999;
+            e._distMiles = (lat && lon) ? haversineDistance(ctx.originCoords.lat, ctx.originCoords.lng, lat, lon) : 999;
             return e;
           }).filter(e => e._distMiles <= maxMiles);
           // Sort by distance
           entities.sort((a, b) => a._distMiles - b._distMiles);
-          filterMeta = { origin: executeTool._originCoords, maxMiles, before, after: entities.length, omitted: before - entities.length };
+          filterMeta = { origin: ctx.originCoords, maxMiles, before, after: entities.length, omitted: before - entities.length };
         }
         // Even without origin, cap at 25 to reduce token bloat
         else if (entities.length > 25) {
@@ -1126,7 +1134,7 @@ async function executeTool(name, input, progressCb) {
       case 'resolve_bh_facility': {
         const match = resolveBHFacility(input.facility_name);
         if (match && match.geocodedCoordinate) {
-          executeTool._originCoords = { lat: match.geocodedCoordinate.latitude, lng: match.geocodedCoordinate.longitude };
+          ctx.originCoords = { lat: match.geocodedCoordinate.latitude, lng: match.geocodedCoordinate.longitude };
           return envelope('BH Facility Cache', 'local', timestamp, {
             name: match.name,
             address: match.address ? `${match.address.line1}, ${match.address.city}, ${match.address.region} ${match.address.postalCode}` : '',
@@ -1174,7 +1182,7 @@ async function executeTool(name, input, progressCb) {
         if (data.results?.[0]?.geometry?.location) {
           const loc = data.results[0].geometry.location;
           // Attach to executeTool context for this session
-          executeTool._originCoords = { lat: loc.lat, lng: loc.lng };
+          ctx.originCoords = { lat: loc.lat, lng: loc.lng };
           console.log(`[Geocode] Origin stored: ${loc.lat}, ${loc.lng}`);
         }
 
@@ -1281,7 +1289,7 @@ async function executeTool(name, input, progressCb) {
             isoLat = geoData.results[0].geometry.location.lat;
             isoLng = geoData.results[0].geometry.location.lng;
             // Store origin so map filtering and Yext distance pre-filter work
-            executeTool._originCoords = { lat: isoLat, lng: isoLng };
+            ctx.originCoords = { lat: isoLat, lng: isoLng };
             console.log(`[Isochrone] Geocoded "${input.address}" → ${isoLat}, ${isoLng}`);
             console.log(`[Geocode] Origin stored: ${isoLat}, ${isoLng}`);
           } else {
@@ -1290,8 +1298,7 @@ async function executeTool(name, input, progressCb) {
         } else if (input.lat != null && input.lng != null) {
           isoLat = input.lat;
           isoLng = input.lng;
-          executeTool._originCoords = { lat: isoLat, lng: isoLng };
-          isoLng = input.lng;
+          ctx.originCoords = { lat: isoLat, lng: isoLng };
         } else if (input.locations?.[0]) {
           // Legacy format: [[lng, lat]] — accept it but normalize
           isoLng = input.locations[0][0];
@@ -1301,10 +1308,10 @@ async function executeTool(name, input, progressCb) {
             console.log(`[Isochrone] Detected swapped coordinates, fixing: [${isoLng}, ${isoLat}] → [${isoLat}, ${isoLng}]`);
             [isoLat, isoLng] = [isoLng, isoLat];
           }
-        } else if (executeTool._originCoords) {
+        } else if (ctx.originCoords) {
           // Fall back to previously geocoded origin
-          isoLat = executeTool._originCoords.lat;
-          isoLng = executeTool._originCoords.lng;
+          isoLat = ctx.originCoords.lat;
+          isoLng = ctx.originCoords.lng;
           console.log(`[Isochrone] Using stored origin: ${isoLat}, ${isoLng}`);
         } else {
           return envelope('Isochrone', 'no-location', timestamp, { error: 'No location provided. Pass address, lat/lng, or geocode first.' });
@@ -1501,10 +1508,6 @@ async function executeTool(name, input, progressCb) {
         if (input.health_system) { where.push('health_system LIKE ?'); params.push(`%${input.health_system}%`); }
         if (input.status) { where.push('status = ?'); params.push(input.status); }
         if (input.active_only !== false) { where.push('is_active = 1'); }
-        if (input.since_date) {
-          where.push('(first_seen_date >= ? OR last_status_change_date >= ?)');
-          params.push(input.since_date, input.since_date);
-        }
 
         const whereClause = where.length > 0 ? `WHERE ${where.join(' AND ')}` : '';
         const permits = permitDb.prepare(
@@ -1626,6 +1629,7 @@ function accumulateGeoData(geo, toolName, result, session) {
       geo.origin = { lat: loc.lat, lng: loc.lng, label: data[0].formatted_address || 'Origin' };
       if (session?.knownEntities) {
         session.knownEntities.origins.push({ lat: loc.lat, lng: loc.lng, label: data[0].formatted_address });
+        if (session.knownEntities.origins.length > 50) session.knownEntities.origins = session.knownEntities.origins.slice(-50);
       }
     }
     if (toolName === 'resolve_bh_facility' && data?.lat) {
@@ -1646,6 +1650,7 @@ function accumulateGeoData(geo, toolName, result, session) {
           // Persist to session memory (deduplicated)
           if (session?.knownEntities && !session.knownEntities.bhLocations.some(b => b.name === e.name && Math.abs(b.lat - entry.lat) < 0.001)) {
             session.knownEntities.bhLocations.push(entry);
+            if (session.knownEntities.bhLocations.length > 50) session.knownEntities.bhLocations = session.knownEntities.bhLocations.slice(-50);
           }
         }
       }
@@ -1696,8 +1701,8 @@ async function runAgentLoop(sessionId, userMessage, res) {
   // Initialize evidence coverage tracker
   const evidence = createEvidenceCoverage(mode, planType, intents, serviceLines);
 
-  // Reset origin coords for this run
-  executeTool._originCoords = null;
+  // Request-scoped context for origin coords (prevents concurrent request bleed)
+  const ctx = { originCoords: null };
 
   // SQLite: log run start
   const run = insertRun.run(sessionId, userMessage, JSON.stringify({ mode, planType, intents, serviceLines }), 'claude-sonnet-4-6');
@@ -1774,7 +1779,7 @@ async function runAgentLoop(sessionId, userMessage, res) {
       continue;
     }
 
-    if (response.stop_reason === 'end_of_turn' || toolCalls.length === 0) {
+    if (response.stop_reason === 'end_turn' || toolCalls.length === 0) {
       fullText = textParts.join('');
       break;
     }
@@ -1805,7 +1810,7 @@ async function runAgentLoop(sessionId, userMessage, res) {
           tool: toolCall.name, step: totalSteps + i + 1, total: totalSteps + toolCalls.length,
           phase: 'progress', label: progressMsg
         });
-      });
+      }, ctx);
       const duration = Date.now() - t0;
       // Strip _rawData before sending to model (it's only for geo accumulation)
       const { _rawData, ...resultForModel } = result;
@@ -1877,9 +1882,9 @@ async function runAgentLoop(sessionId, userMessage, res) {
 
   // Send map data if geo data was collected AND user asked for a map or isochrone was called
   const wantsMap = /map\s*(this|these|it|them|all|bh)|show.*map|plot.*map|map.*location|visuali|^map\b|a\s+map|the\s+map|provide.*map|complete.*map|include.*map/i.test(userMessage);
-  // Fallback: if accumulateGeoData missed the origin, use executeTool._originCoords
-  if (!runGeo.origin && executeTool._originCoords) {
-    runGeo.origin = { lat: executeTool._originCoords.lat, lng: executeTool._originCoords.lng, label: 'Origin' };
+  // Fallback: if accumulateGeoData missed the origin, use ctx.originCoords
+  if (!runGeo.origin && ctx.originCoords) {
+    runGeo.origin = { lat: ctx.originCoords.lat, lng: ctx.originCoords.lng, label: 'Origin' };
   }
   // Merge session entities if current round has none (fixes BH pin loss after compression)
   if (session.knownEntities && runGeo.bhLocations.length === 0 && session.knownEntities.bhLocations.length > 0) {
@@ -2319,6 +2324,7 @@ Output ONLY the JSON object. No markdown, no commentary, no code fences.`;
 
       const sessionId = `newsletter-${Date.now()}`;
       const session = getSession(sessionId);
+      const ctx = { originCoords: null };
       session.messages.push({ role: 'user', content: generationPrompt });
 
       const newsletterTools = tools.filter(t =>
@@ -2356,7 +2362,7 @@ Output ONLY the JSON object. No markdown, no commentary, no code fences.`;
 
         session.messages.push({ role: 'assistant', content: assistantContent });
 
-        if (response.stop_reason === 'end_of_turn' || toolCalls.length === 0) {
+        if (response.stop_reason === 'end_turn' || toolCalls.length === 0) {
           fullText = textParts.join('');
           break;
         }
@@ -2364,7 +2370,7 @@ Output ONLY the JSON object. No markdown, no commentary, no code fences.`;
         const toolResults = [];
         for (const toolCall of toolCalls) {
           console.log(`  [Tool] ${toolCall.name}(${JSON.stringify(toolCall.input).slice(0, 100)})`);
-          const result = await executeTool(toolCall.name, toolCall.input);
+          const result = await executeTool(toolCall.name, toolCall.input, null, ctx);
           toolResults.push({ type: 'tool_result', tool_use_id: toolCall.id, content: JSON.stringify(result) });
         }
         session.messages.push({ role: 'user', content: toolResults });
@@ -2592,6 +2598,7 @@ app.post('/webhook/market-research', async (req, res) => {
 
   try {
     const session = getSession(sessionId);
+    const ctx = { originCoords: null };
     session.messages.push({ role: 'user', content: query });
 
     let fullText = '';
@@ -2618,14 +2625,14 @@ app.post('/webhook/market-research', async (req, res) => {
 
       session.messages.push({ role: 'assistant', content: assistantContent });
 
-      if (response.stop_reason === 'end_of_turn' || toolCalls.length === 0) {
+      if (response.stop_reason === 'end_turn' || toolCalls.length === 0) {
         fullText = textParts.join('');
         break;
       }
 
       const toolResults = [];
       for (const toolCall of toolCalls) {
-        const result = await executeTool(toolCall.name, toolCall.input);
+        const result = await executeTool(toolCall.name, toolCall.input, null, ctx);
         toolResults.push({ type: 'tool_result', tool_use_id: toolCall.id, content: JSON.stringify(result) });
       }
       session.messages.push({ role: 'user', content: toolResults });

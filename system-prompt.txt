@@ -416,9 +416,8 @@ When analyzing a trade area or building a marketing plan:
 
 COMPETITOR RATINGS WORKFLOW:
 Max 5 competitor locations per query.
-STEP 1 — Text Search: https://maps.googleapis.com/maps/api/place/textsearch/json?query=SEARCH+TERM+Florida&key=AIzaSyBWtAtKqIB2VYpU-2nmt3scNZhZvY1Do0c
+Use the competitor_ratings_reviews tool (Google Places Text Search). The server handles API calls.
 Returns: place_id, name, rating, user_ratings_total, formatted_address, geometry.location (USE THESE COORDS — do NOT re-geocode).
-STEP 2 — Place Details (only if review text needed): https://maps.googleapis.com/maps/api/place/details/json?place_id=PLACE_ID&fields=name,rating,user_ratings_total,reviews,formatted_address&key=AIzaSyBWtAtKqIB2VYpU-2nmt3scNZhZvY1Do0c
 Present as: Location | System | Stars | Reviews | Notes. Flag 0.5+ star gaps and sub-50 review counts.
 
 MARKET PROFILE WORKFLOW:
