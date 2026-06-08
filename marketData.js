@@ -95,6 +95,25 @@ function isBhOwned(name) {
   return BH_OWNED_RE.test(name || '');
 }
 
+// Turn a read_page markdown dump into a clean plain-text excerpt for a news item.
+function newsExcerpt(md, max = 600) {
+  if (!md) return null;
+  let s = String(md);
+  // Jina Reader prepends "Title: ... URL Source: ... Published Time: ... Markdown
+  // Content:" - cut to the actual article body when that header is present.
+  const mc = s.search(/Markdown Content:/i);
+  if (mc !== -1) s = s.slice(mc + 'Markdown Content:'.length);
+  s = s.replace(/^\s*(Title:|URL Source:|Published Time:)[^\n]*\n?/gim, '');
+  const t = s
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, '')      // images
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')    // links -> link text
+    .replace(/^[#>\-\*\s]+/gm, '')              // leading heading/list markers
+    .replace(/`+/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return t ? t.slice(0, max) : null;
+}
+
 // Yext filter (URL-encoded) for physicians by specialty + city.
 function buildPhysicianFilter(specialty, city) {
   const obj = {
@@ -516,6 +535,17 @@ async function buildMarketData(body, deps) {
         title: r.title || null,
         url: r.url || null,
         summary: r.description || null,
+      }));
+      // Deepen the top stories: read the full article so the plan gets a real,
+      // sourced excerpt, not just the search snippet. Bounded to the top 2.
+      const toRead = news.filter(n => n.url).slice(0, 2);
+      await Promise.all(toRead.map(async (n) => {
+        try {
+          const rp = await executeTool('read_page', { url: n.url }, null, ctx);
+          const content = rp._rawData?.content || rp.data?.content || '';
+          const ex = newsExcerpt(content);
+          if (ex) { n.excerpt = ex; sources.add('Jina Reader / Firecrawl Scrape'); }
+        } catch (e) { /* keep the snippet-only item */ }
       }));
     } catch (e) {
       warnings.push(`news lookup failed: ${e.message}`);
