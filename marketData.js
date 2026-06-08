@@ -75,6 +75,26 @@ function serviceLineToSearchTerm(label) {
   return l || 'healthcare';
 }
 
+// Baptist Health South Florida owned brands. A competitor text search surfaces
+// BH's OWN facilities (and several BH brands that don't carry the word
+// "Baptist" - Miami Cancer Institute, Boca Raton Regional, Bethesda, etc.).
+// These must never be returned as competitors; we route them to own_network
+// instead so the planner can still see BH's existing footprint.
+const BH_OWNED_RE = new RegExp([
+  'baptist health', 'baptist hospital', 'baptist outpatient', 'baptist emergency',
+  'baptist medical', 'baptist surgery', '\\bbaptist\\b',
+  'south miami hospital', 'doctors hospital', 'west kendall baptist',
+  'homestead hospital', 'mariners hospital', "fishermen'?s community",
+  'bethesda hospital', 'boca raton regional', 'lynn cancer institute',
+  'miami cancer institute', 'miami neuroscience institute',
+  'miami cardiac', 'miami orthopedics', 'marcus neuroscience',
+  'christine e\\.? lynn', 'eugene m\\.? & christine',
+].join('|'), 'i');
+
+function isBhOwned(name) {
+  return BH_OWNED_RE.test(name || '');
+}
+
 // Yext filter (URL-encoded) for physicians by specialty + city.
 function buildPhysicianFilter(specialty, city) {
   const obj = {
@@ -327,6 +347,7 @@ async function buildMarketData(body, deps) {
 
   // ── 5. Competitors + drive times (per service line, deduped) ────────────
   let competitors = [];
+  let ownNetwork = []; // BH-owned facilities the competitor search surfaced
   const COMPETITOR_MAX_MILES = 30; // drop statewide noise; keep the real market
   if (include.has('competitors')) {
     // Anchor the Places query to a city near the origin. Prefer an explicit city
@@ -372,7 +393,13 @@ async function buildMarketData(body, deps) {
         });
       }
     }
-    competitors = [...seen.values()];
+    // Split BH-owned facilities out of the competitor set. They are not
+    // competitors; surface them separately so the planner knows BH's footprint
+    // and never writes "our competitor is Baptist Health ...".
+    for (const c of seen.values()) {
+      if (isBhOwned(c.name)) ownNetwork.push({ ...c, own: true });
+      else competitors.push(c);
+    }
 
     // Drive times in one batched Distance Matrix call (10 destinations max each).
     if (include.has('drive_times') && origin && competitors.length) {
@@ -482,6 +509,7 @@ async function buildMarketData(body, deps) {
     has_trade_area: !!tradeArea,
     demographics_zips_with_data: demographics.filter(d => d.total_pop != null).length,
     competitors_found: competitors.length,
+    own_network_found: ownNetwork.length,
     physicians_found: physicians.length,
   };
 
@@ -493,6 +521,7 @@ async function buildMarketData(body, deps) {
     payer_mix: payerMix,
     health_behaviors: healthBehaviors,
     competitors,
+    own_network: ownNetwork,
     drive_times: driveTimes,
     bh_locations: bhLocations,
     physicians,
