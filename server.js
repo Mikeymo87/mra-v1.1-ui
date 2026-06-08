@@ -4,6 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const Anthropic = require('@anthropic-ai/sdk');
 const { insertRun, updateRun, insertToolCall } = require('./db');
+const { makeMarketDataHandler } = require('./marketData');
 
 const app = express();
 app.use(express.json({ limit: '1mb' }));
@@ -2553,6 +2554,19 @@ setInterval(() => {
 })();
 
 // ── API Endpoint ────────────────────────────────────────────────────────────
+
+// ── Structured Market Data (G1) — deterministic JSON for the Marketing Planner ─
+// Reuses the existing tool executors (executeTool) and local datasets. No LLM in
+// the hot path. See marketData.js. Keeps /api/chat untouched.
+app.post('/api/market-data', makeMarketDataHandler({
+  executeTool,
+  cdcPlacesData,
+  zctaGeoJSON,
+  pointInIsochrone,
+  haversineDistance,
+  SPECIALTY_SYNONYMS,
+  demographicIndex,
+}));
 
 app.post('/api/chat', async (req, res) => {
   const { query, session_id } = req.body;
