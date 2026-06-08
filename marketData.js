@@ -500,6 +500,58 @@ async function buildMarketData(body, deps) {
     }));
   }
 
+  // ── 9. Market news (Firecrawl web research) ─────────────────────────────
+  // Recent market developments, competitor moves, partnerships - the qualitative
+  // context the data blocks don't carry. Returned as sourced, cited items.
+  let news = [];
+  if (include.has('news')) {
+    const place = address || (zips.length ? `ZIP code ${zips[0]} area, Florida` : 'South Florida');
+    const slLabel = serviceLines.length ? serviceLines.join(' and ') : 'healthcare';
+    const q = `recent news and market developments in ${slLabel} near ${place} 2025 2026 new facility competitor expansion partnership merger acquisition`;
+    try {
+      const wr = await executeTool('web_research', { research_query: q }, null, ctx);
+      sources.add('Firecrawl Web Search');
+      const items = wr._rawData || wr.data || [];
+      news = (Array.isArray(items) ? items : []).slice(0, 6).map(r => ({
+        title: r.title || null,
+        url: r.url || null,
+        summary: r.description || null,
+      }));
+    } catch (e) {
+      warnings.push(`news lookup failed: ${e.message}`);
+    }
+  }
+
+  // ── 10. Competitor review themes (DataForSEO sentiment + themes) ─────────
+  // Not just a star rating - what patients actually say about the top competitors
+  // (themes, sentiment split, named providers). Bounded to the top competitors
+  // and a modest review pull; cached per location by the reviews tool.
+  let reviewThemes = [];
+  if (include.has('review_themes') && competitors.length) {
+    const top = competitors.slice(0, 3);
+    const limit = Number(body.reviews_limit) > 0 ? Number(body.reviews_limit) : 120;
+    const results = await Promise.all(top.map(async (c) => {
+      try {
+        const rr = await executeTool('google_reviews_report', { query: c.name, reviewsLimit: limit, include_csv: false }, null, ctx);
+        const md = rr.metadata || rr._rawData || {};
+        return {
+          name: c.name,
+          rating: c.rating ?? md.avg_rating ?? null,
+          reviews_analyzed: md.total_reviews_analyzed ?? null,
+          reviews_available: md.total_reviews_available ?? c.reviews ?? null,
+          top_themes: md.top_themes || [],
+          sentiment_breakdown: md.sentiment_breakdown || null,
+          mentioned_names: (md.mentioned_names || []).slice(0, 10),
+        };
+      } catch (e) {
+        warnings.push(`review_themes for "${c.name}" failed: ${e.message}`);
+        return null;
+      }
+    }));
+    reviewThemes = results.filter(Boolean);
+    if (reviewThemes.length) sources.add('DataForSEO Google Reviews + theme/sentiment analysis');
+  }
+
   // ── Evidence coverage summary ───────────────────────────────────────────
   const evidenceCoverage = {
     requested: [...include],
@@ -511,6 +563,8 @@ async function buildMarketData(body, deps) {
     competitors_found: competitors.length,
     own_network_found: ownNetwork.length,
     physicians_found: physicians.length,
+    news_found: news.length,
+    review_themes_found: reviewThemes.length,
   };
 
   return {
@@ -526,6 +580,8 @@ async function buildMarketData(body, deps) {
     bh_locations: bhLocations,
     physicians,
     permits,
+    news,
+    review_themes: reviewThemes,
     evidence_coverage: evidenceCoverage,
     sources: [...sources],
     warnings,
