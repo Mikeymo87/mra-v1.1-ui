@@ -430,15 +430,14 @@ const tools = [
   },
   {
     name: 'google_reviews_report',
-    description: 'Fetches Google Reviews via DataForSEO with server-side caching. First pull fetches from API and caches locally. Repeat pulls for the same location only fetch new reviews and merge with cache - near zero cost on repeat queries. Server pre-computes stats (names mentioned, themes, sentiment), generates downloadable CSV, and returns ALL full review text for you to read and analyze. Use this data to answer any question about reviews. For BH review reports and CSVs, always set include_csv=true. IMPORTANT: Do NOT include CSV download links or paths in your response - the UI renders a download button automatically.',
+    description: 'Quick Google reviews snapshot via DataForSEO — the ~200 most recent reviews for a location, with server-computed stats (names mentioned, themes, sentiment) and a downloadable CSV. Use for a fast read on a single location\'s recent reviews. NOTE: full review history and the monthly staff-recognition report ("The Name Drop") are handled by a separate standalone app, not this tool. For CSVs always set include_csv=true. IMPORTANT: Do NOT include CSV download links or paths in your response - the UI renders a download button automatically.',
     input_schema: {
       type: 'object',
       properties: {
         query: { type: 'string', description: 'Business name or Google Maps query. For multiple locations, call this tool once per location.' },
-        reviewsLimit: { type: 'number', description: 'Number of reviews to pull, sorted newest first. 200=standard, 500=deep dive, 1000+=large report, 4490=max. Every review includes its date. When user asks for a time period like "last 6 months", pull enough to cover that window (e.g. 1000+ for a busy location). When user asks for a specific count like "last 500 reviews", use that number.' },
         include_csv: { type: 'boolean', description: 'Generate downloadable CSV. Default true for 10+ reviews.' }
       },
-      required: ['query', 'reviewsLimit']
+      required: ['query']
     }
   },
   {

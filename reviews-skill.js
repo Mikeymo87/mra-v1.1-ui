@@ -547,7 +547,9 @@ async function executeReviewsReport(input, progressCb) {
   const cached = loadCache(place.place_id);
   let reviews;
   let fromCache = false;
-  const requestedDepth = Math.min(reviewsLimit || 200, 4490);
+  // MRA does quick snapshots only — capped at the last 200 reviews. Full-history
+  // pulls + monthly reports live in the standalone Name Drop app.
+  const requestedDepth = Math.min(reviewsLimit || 200, 200);
 
   if (cached && cached.reviews.length > 0) {
     // Cache exists — only pull new reviews since the newest cached one

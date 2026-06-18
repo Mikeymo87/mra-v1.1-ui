@@ -21,7 +21,7 @@ const anthropic = new Anthropic.default({ apiKey: process.env.ANTHROPIC_API_KEY 
 // ── Configuration ─────────────────────────────────────────────────────────────
 
 const FIRECRAWL_KEY = process.env.FIRECRAWL_API_KEY;
-const EXTRACTION_MODEL = 'claude-sonnet-4-6-20250514';
+const EXTRACTION_MODEL = 'claude-sonnet-4-6';
 
 const COMPETITOR_SYSTEMS = {
   'Broward Health': ['Broward Health', 'North Broward Hospital District', 'NBHD'],
