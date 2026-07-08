@@ -140,9 +140,37 @@ async function submitReviewTask(placeId, depth, sortBy = 'newest') {
   return { taskId: task.id, priority, cost: task.cost };
 }
 
+// ─── DataForSEO: shared tasks_ready poller ────────────────────
+// DataForSEO caps tasks_ready at 20 calls/min. Concurrent pollers each hitting
+// it every 5s blow past that (3 pollers ≈ 36 calls/min), so all concurrent
+// pollers share ONE in-flight tasks_ready call per 5s window: the promise is
+// memoized with a timestamp, and a rejected call is cleared immediately so the
+// next poll retries instead of re-serving the failure.
+let _tasksReadyPromise = null;
+let _tasksReadyAt = 0;
+const TASKS_READY_WINDOW_MS = 5000;
+
+function fetchTasksReady() {
+  const now = Date.now();
+  if (_tasksReadyPromise && (now - _tasksReadyAt) < TASKS_READY_WINDOW_MS) {
+    return _tasksReadyPromise;
+  }
+  _tasksReadyAt = now;
+  const p = fetch(`${BASE_URL}/tasks_ready`, {
+    headers: { 'Authorization': authHeader() }
+  }).then(res => res.json());
+  _tasksReadyPromise = p;
+  p.catch(() => { if (_tasksReadyPromise === p) _tasksReadyPromise = null; });
+  return p;
+}
+
 // ─── DataForSEO: poll for results ─────────────────────────────
-async function pollForResults(taskId, priority, progressCb) {
-  const maxWaitMs = priority === 2 ? 3 * 60 * 1000 : 10 * 60 * 1000;
+// maxWaitMsOverride (optional) caps total polling time; when absent the
+// default priority-based budget applies (unchanged legacy behavior).
+async function pollForResults(taskId, priority, progressCb, maxWaitMsOverride) {
+  const maxWaitMs = Number(maxWaitMsOverride) > 0
+    ? Number(maxWaitMsOverride)
+    : (priority === 2 ? 3 * 60 * 1000 : 10 * 60 * 1000);
   const pollIntervalMs = 5000;
   const startTime = Date.now();
   let attempts = 0;
@@ -154,11 +182,8 @@ async function pollForResults(taskId, priority, progressCb) {
     const elapsed = Math.round((Date.now() - startTime) / 1000);
     if (progressCb) progressCb({ phase: 'polling', elapsed_seconds: elapsed, attempts });
 
-    // Check if task is ready
-    const readyRes = await fetch(`${BASE_URL}/tasks_ready`, {
-      headers: { 'Authorization': authHeader() }
-    });
-    const readyData = await readyRes.json();
+    // Check if task is ready (shared across concurrent pollers — rate cap)
+    const readyData = await fetchTasksReady();
 
     const readyTasks = readyData.tasks?.[0]?.result || [];
     const isReady = readyTasks.some(t => t.id === taskId);
@@ -536,7 +561,10 @@ function buildFullResult(locationName, reviews, stats, names, themes, csvFilenam
 
 // ─── Main entry point ─────────────────────────────────────────
 async function executeReviewsReport(input, progressCb) {
-  const { query, reviewsLimit, include_csv } = input;
+  const { query, reviewsLimit, include_csv, max_wait_s } = input;
+  // Optional polling budget (seconds). When absent, pollForResults keeps its
+  // default priority-based budget — the chat agent tool path is unchanged.
+  const maxWaitMs = Number(max_wait_s) > 0 ? Number(max_wait_s) * 1000 : undefined;
 
   // 1. Resolve place_id via Google Places
   if (progressCb) progressCb({ phase: 'progress', message: `Looking up "${query}" on Google Maps...` });
@@ -562,7 +590,7 @@ async function executeReviewsReport(input, progressCb) {
 
     const result = await pollForResults(taskId, priority, (status) => {
       if (progressCb) progressCb({ phase: 'progress', message: `Fetching new reviews... ${status.elapsed_seconds}s` });
-    });
+    }, maxWaitMs);
 
     const freshReviews = result.reviews || [];
     const { merged, newCount } = mergeReviews(cached.reviews, freshReviews);
@@ -582,7 +610,7 @@ async function executeReviewsReport(input, progressCb) {
       const { taskId: fullId, priority: fullPri } = await submitReviewTask(place.place_id, requestedDepth);
       const fullResult = await pollForResults(fullId, fullPri, (status) => {
         if (progressCb) progressCb({ phase: 'progress', message: `Pulling ${requestedDepth} reviews... ${status.elapsed_seconds}s` });
-      });
+      }, maxWaitMs);
       const { merged: fullMerged } = mergeReviews(reviews, fullResult.reviews || []);
       reviews = fullMerged;
       saveCache(place.place_id, fullResult.locationName || place.name, reviews);
@@ -596,7 +624,7 @@ async function executeReviewsReport(input, progressCb) {
 
     const result = await pollForResults(taskId, priority, (status) => {
       if (progressCb) progressCb({ phase: 'progress', message: `Waiting for reviews... ${status.elapsed_seconds}s elapsed` });
-    });
+    }, maxWaitMs);
 
     reviews = result.reviews || [];
     saveCache(place.place_id, result.locationName || place.name, reviews);
