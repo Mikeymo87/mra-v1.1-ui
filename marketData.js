@@ -44,6 +44,21 @@ const DEMAND_MEASURES = [
   'DIABETES', 'BPHIGH', 'HIGHCHOL', 'DEPRESSION', 'ACCESS2', 'GHLTH',
 ];
 
+// Static field-glossary block returned with every response so downstream
+// consumers (the planner, humans) never misread a denominator. Purely additive.
+const FIELD_DEFINITIONS = {
+  payer_mix: {
+    commercial_pct: 'Private/commercial coverage as % of the civilian noninstitutionalized population, ALL AGES (ACS DP03_0097PE).',
+    public_pct: 'Public coverage (Medicare/Medicaid/VA) as % of the civilian noninstitutionalized population, ALL AGES (ACS DP03_0098PE).',
+    uninsured_pct: 'Uninsured as % of the civilian noninstitutionalized population, ALL AGES (ACS DP03_0099PE).',
+    commercial_18_64_pct: 'Share of the 19-64 civilian noninstitutionalized population with private coverage (derived from ACS counts DP03_0106E + DP03_0111E over DP03_0102E) - the commercially insured working-age cohort BH marketing targets. Different denominator than commercial_pct; NOT comparable.',
+    public_18_64_pct: 'Employed 19-64 population with public coverage (ACS DP03_0107E) as a share of the total 19-64 population (DP03_0102E), same 19-64 denominator.',
+  },
+  health_behaviors: 'CDC PLACES model-based estimates (BRFSS), % of adults per ZIP.',
+  competitors: 'Google Places text search per service line, 30-mile cap; ranked by rating x reviews. Use competitors_tiered for drive-time market tiers.',
+  trade_area: 'Drive-time isochrone catchment; population from CDC PLACES ZIP populations.',
+};
+
 // Map a planner service-line label to a Yext physician specialty keyword.
 function serviceLineToSpecialty(label, SPECIALTY_SYNONYMS) {
   const l = (label || '').toLowerCase().trim();
@@ -213,8 +228,150 @@ function normalizeRadius(radius) {
   return [10, 15, 20];
 }
 
+// Dedupe + sort the caller's ZIP list once so the same ZIP SET always produces
+// the same origin and response regardless of input order. (The cache key already
+// sorted zips, so different orderings aliased to one cache entry while producing
+// different origins - this makes the build itself order-independent.)
+function normalizeZips(zipsInput) {
+  return [...new Set(
+    (zipsInput || [])
+      .filter(z => z != null) // String(null) would survive filter(Boolean) as 'null'
+      .map(z => String(z).trim())
+      .filter(Boolean)
+  )].sort();
+}
+
+// executeTool NEVER throws - failures come back as envelope objects with
+// status:'failed' and { error } payloads. Surface that as a string (or null on
+// success) so each block can treat a failed envelope as a block failure.
+function envelopeError(env) {
+  if (!env || typeof env !== 'object') return 'no result returned';
+  const raw = env._rawData !== undefined ? env._rawData : env.data;
+  if (env.status === 'failed') {
+    return (raw && typeof raw === 'object' && raw.error) ? String(raw.error) : 'tool call failed';
+  }
+  if (raw && typeof raw === 'object' && !Array.isArray(raw) && raw.error) return String(raw.error);
+  return null;
+}
+
+// ── Competitor tiering (drive-time market tiers) ────────────────────────────
+// Google Places text search returns a flat, strength-sorted list. The planner
+// needs to know which competitors are IN the trade area vs adjacent submarkets
+// vs broader-region noise, and which "competitors" are actually individual
+// practitioners rather than destination facilities.
+
+const FACILITY_WORDS = /\b(center|centre|clinic|institute|hospital|orthopedic?s?|orthopaedic?s?|medical|health|care|group|associates|partners|specialists|sports|physical therapy|rehab|urgent|imaging|mri|surgery|surgical|spine|joint|wellness|network|physicians)\b/i;
+const CRED_RE = /,?\s+(m\.?d\.?|d\.?o\.?|d\.?p\.?m\.?|p\.?a\.?|a\.?r\.?n\.?p\.?|dpt|pa-c)\.?\s*$/i;
+
+// Heuristic: does this Places result look like a person, not a facility?
+// True on a credential suffix ("..., MD"), a "Dr. " prefix without facility
+// words, or a bare 2-3 capitalized-token person-name shape without facility words.
+function isIndividualPractitioner(name) {
+  const n = String(name || '').trim();
+  if (!n) return false;
+  if (CRED_RE.test(n)) return true;
+  if (FACILITY_WORDS.test(n)) return false;
+  if (/^dr\.?\s+/i.test(n)) return true;
+  const tokens = n.split(/\s+/);
+  if (tokens.length >= 2 && tokens.length <= 3 &&
+      tokens.every(t => /^[A-Z][a-z'.’-]+$/.test(t))) {
+    return true;
+  }
+  return false;
+}
+
+// City parsed from a Google formatted_address: the segment immediately before
+// the state segment ("..., Doral, FL 33172, USA" → "Doral").
+function submarketFromAddress(address) {
+  if (!address) return null;
+  const parts = String(address).split(',').map(s => s.trim()).filter(Boolean);
+  if (parts.length < 2) return null;
+  for (let i = parts.length - 1; i > 0; i--) {
+    if (/^[A-Z]{2}(\s+\d{5}(-\d{4})?)?$/.test(parts[i])) return parts[i - 1] || null;
+  }
+  // Fallback: 2nd-from-last segment (skipping a trailing country segment).
+  const idx = /^(usa|united states)$/i.test(parts[parts.length - 1])
+    ? parts.length - 3 : parts.length - 2;
+  return parts[idx] || null;
+}
+
+/**
+ * Tier competitors by drive time from the origin.
+ * - Only competitors with drive_time_min != null participate.
+ * - Individual practitioners are split out (flagged, never dropped).
+ * - Destination facilities are sorted by drive time; IN-MARKET = within
+ *   inMarketMax minutes AND before the first drive-time jump where
+ *   next > prev*gapRatio and (next - prev) >= gapMinAbs.
+ * - ADJACENT = the rest within adjacentMax minutes, labeled with a submarket
+ *   (city) parsed from the address. BROADER = beyond adjacentMax.
+ * - Within each tier, entries are ranked by rating x reviews (rating orders
+ *   WITHIN a tier only - it never promotes a far facility into the market).
+ * - nearest_comparable = the closest destination, with a note, when in_market
+ *   is empty (thin-market floor so the planner always has a benchmark).
+ * Returns null when no competitor has a drive time.
+ */
+function tierCompetitors(competitors, { inMarketMax = 10, adjacentMax = 20, gapRatio = 1.5, gapMinAbs = 3 } = {}) {
+  const withDt = (competitors || []).filter(c => c && c.drive_time_min != null);
+  if (!withDt.length) return null;
+
+  const individuals = [];
+  const destinations = [];
+  for (const c of withDt) {
+    if (isIndividualPractitioner(c.name)) individuals.push({ ...c, individual_practitioner: true });
+    else destinations.push({ ...c });
+  }
+  destinations.sort((a, b) => a.drive_time_min - b.drive_time_min);
+
+  // In-market cut: stop at the first destination past inMarketMax, or at the
+  // first significant drive-time jump (both ratio AND absolute-minutes gates).
+  let cut = 0;
+  for (let i = 0; i < destinations.length; i++) {
+    const dt = destinations[i].drive_time_min;
+    if (dt > inMarketMax) break;
+    if (i > 0) {
+      const prev = destinations[i - 1].drive_time_min;
+      if (dt > prev * gapRatio && (dt - prev) >= gapMinAbs) break;
+    }
+    cut = i + 1;
+  }
+
+  const inMarket = destinations.slice(0, cut);
+  const rest = destinations.slice(cut);
+  const adjacent = rest.filter(d => d.drive_time_min <= adjacentMax)
+    .map(d => ({ ...d, submarket: submarketFromAddress(d.address) }));
+  const broader = rest.filter(d => d.drive_time_min > adjacentMax);
+
+  const byStrength = (a, b) => (b.rating || 0) * (b.reviews || 0) - (a.rating || 0) * (a.reviews || 0);
+  inMarket.sort(byStrength);
+  adjacent.sort(byStrength);
+  broader.sort(byStrength);
+  individuals.sort(byStrength);
+
+  let nearestComparable = null;
+  if (!inMarket.length && destinations.length) {
+    nearestComparable = {
+      ...destinations[0],
+      note: `No destination competitor within the in-market window; nearest comparable facility is ${destinations[0].drive_time_min} min away (thin-market floor).`,
+    };
+  }
+
+  return {
+    in_market: inMarket,
+    adjacent,
+    broader,
+    individual_practitioners: individuals,
+    nearest_comparable: nearestComparable,
+    method: `Destination facilities sorted by drive time from origin. IN-MARKET = <=${inMarketMax} min and before the first drive-time jump (next > ${gapRatio}x prev AND gap >= ${gapMinAbs} min). ADJACENT = remaining <=${adjacentMax} min, labeled by submarket city. BROADER = >${adjacentMax} min. Individual practitioners are split out, never dropped. Within each tier, entries rank by rating x reviews; rating never promotes a distant facility into the market. Caveat: the underlying Google Places text search is capped at the top 10 results per service-line term (by rating x reviews), so tiers reflect the strongest visible competitors, not an exhaustive census.`,
+  };
+}
+
 /**
  * Build the deterministic market-data response.
+ * Blocks run CONCURRENTLY (respecting the dependency graph) with per-block
+ * isolation: a failed block becomes a warning + fallback value, never a failed
+ * request. Response shape is byte-compatible with the serial version except
+ * for additive fields (competitors_tiered, field_definitions,
+ * evidence_coverage.blocks_failed).
  * @param body request body
  * @param deps server internals injected from server.js
  */
@@ -224,7 +381,7 @@ async function buildMarketData(body, deps) {
     SPECIALTY_SYNONYMS, demographicIndex,
   } = deps;
 
-  const zips = Array.isArray(body.zips) ? body.zips.map(z => String(z).trim()).filter(Boolean) : [];
+  const zips = normalizeZips(body.zips);
   const address = body.address ? String(body.address).trim() : null;
   const serviceLines = Array.isArray(body.service_lines) ? body.service_lines.filter(Boolean) : [];
   const radiusMinutes = normalizeRadius(body.radius || body.radius_minutes);
@@ -239,58 +396,93 @@ async function buildMarketData(body, deps) {
   // payer_mix rides on the demographics census pull
   if (include.has('payer_mix')) include.add('demographics');
 
-  const warnings = [];
-  const sources = new Set();
-  const ctx = { originCoords: null };
-
-  // ── 1. Resolve origin ──────────────────────────────────────────────────
+  // ── Stage 0: resolve origin (one geocode, or local ZIP centroids) ────────
+  const originWarnings = [];
+  const originSources = new Set();
   let origin = null;
   if (address) {
+    const ctx0 = { originCoords: null };
     const enc = encodeURIComponent(address).replace(/%20/g, '+');
-    const geo = await executeTool('geocode_address', { address: enc }, null, ctx);
-    sources.add('Google Geocoding API');
+    const geo = await executeTool('geocode_address', { address: enc }, null, ctx0);
+    originSources.add('Google Geocoding API');
+    const geoErr = envelopeError(geo);
+    if (geoErr) originWarnings.push(`origin geocode failed: ${geoErr}`);
     const r = (geo._rawData || geo.data);
     const loc = Array.isArray(r) ? r[0]?.geometry?.location : r?.geometry?.location;
     if (loc) origin = { lat: loc.lat, lng: loc.lng, label: (Array.isArray(r) ? r[0]?.formatted_address : null) || address };
-    if ((geo.warnings || []).length) warnings.push(...geo.warnings.map(w => (typeof w === 'string' ? w : w.message)));
+    if ((geo.warnings || []).length) originWarnings.push(...geo.warnings.map(w => (typeof w === 'string' ? w : w.message)));
   }
   if (!origin && zips.length) {
-    const c = zipCentroid(zctaGeoJSON, zips[0]);
-    if (c) origin = { lat: c.lat, lng: c.lng, label: `ZIP ${zips[0]} centroid` };
-  }
-  if (origin) ctx.originCoords = { lat: origin.lat, lng: origin.lng };
-
-  // ── 2. Trade area (isochrone → catchment ZIPs) ─────────────────────────
-  let tradeArea = null;
-  let effectiveZips = [...zips];
-  if (include.has('trade_area') && origin) {
-    const rangeSeconds = radiusMinutes.slice(0, 3).map(m => m * 60);
-    const iso = await executeTool('drive_time_isochrone',
-      { lat: origin.lat, lng: origin.lng, range: rangeSeconds }, null, ctx);
-    sources.add('OpenRouteService Isochrone API');
-    const isoData = iso._rawData || iso.data;
-    if (isoData?.features) {
-      const { zips: catchmentZips, population } =
-        catchmentFromIsochrone(zctaGeoJSON, isoData, pointInIsochrone, cdcPlacesData);
-      tradeArea = {
-        origin,
-        minutes: radiusMinutes,
-        catchment_zips: catchmentZips,
-        catchment_population: population,
-      };
-      // If caller gave no ZIPs, drive the demographic/CDC pulls off the catchment.
-      if (!effectiveZips.length && catchmentZips.length) {
-        // Limit to ZIPs we have CDC coverage for to keep Census calls bounded.
-        effectiveZips = catchmentZips.filter(z => cdcPlacesData?.[z]).slice(0, 40);
-      }
-    } else {
-      warnings.push('Trade-area isochrone unavailable; catchment not computed.');
+    // Deterministic origin: the AVERAGE of all provided ZIP centroids, not just
+    // zips[0] (which made the origin depend on caller ordering while the cache
+    // key did not). Falls back to the single found centroid when only one
+    // resolves.
+    const found = zips.map(z => ({ zip: z, c: zipCentroid(zctaGeoJSON, z) })).filter(x => x.c);
+    if (found.length > 1) {
+      const lat = found.reduce((s, x) => s + x.c.lat, 0) / found.length;
+      const lng = found.reduce((s, x) => s + x.c.lng, 0) / found.length;
+      origin = { lat, lng, label: `centroid of ${found.length} trade-area ZIPs` };
+    } else if (found.length === 1) {
+      origin = { lat: found[0].c.lat, lng: found[0].c.lng, label: `ZIP ${found[0].zip} centroid` };
     }
   }
 
-  // ── 3. Demographics + payer mix (deterministic Census pulls) ────────────
-  const demoByZip = {};
-  if (include.has('demographics') && effectiveZips.length) {
+  // Tool executors MUTATE the shared ctx (geocode_address and
+  // drive_time_isochrone set ctx.originCoords). Under parallelism each block
+  // gets its own clone so no block can clobber another's origin.
+  const blockCtx = () => ({ originCoords: origin ? { lat: origin.lat, lng: origin.lng } : null });
+
+  // Per-block isolation runner. fn receives a tracker t = { warnings, sources }
+  // scoped to the block; warnings/sources are merged in a stable order at the
+  // end so responses stay deterministic under concurrency.
+  async function runBlock(name, fn, fallback) {
+    const t = { warnings: [], sources: new Set() };
+    try {
+      const value = await fn(t);
+      return { name, value, warnings: t.warnings, sources: t.sources, failed: false };
+    } catch (e) {
+      t.warnings.push(`${name} failed: ${e.message}`);
+      return { name, value: fallback, warnings: t.warnings, sources: t.sources, failed: true };
+    }
+  }
+
+  // ── Trade area (isochrone → catchment ZIPs) ─────────────────────────────
+  const tradeAreaP = runBlock('trade_area', async (t) => {
+    if (!include.has('trade_area') || !origin) return null;
+    const rangeSeconds = radiusMinutes.slice(0, 3).map(m => m * 60);
+    const iso = await executeTool('drive_time_isochrone',
+      { lat: origin.lat, lng: origin.lng, range: rangeSeconds }, null, blockCtx());
+    t.sources.add('OpenRouteService Isochrone API');
+    const err = envelopeError(iso);
+    if (err) throw new Error(err);
+    const isoData = iso._rawData || iso.data;
+    if (!isoData?.features) {
+      t.warnings.push('Trade-area isochrone unavailable; catchment not computed.');
+      return null;
+    }
+    const { zips: catchmentZips, population } =
+      catchmentFromIsochrone(zctaGeoJSON, isoData, pointInIsochrone, cdcPlacesData);
+    return {
+      origin,
+      minutes: radiusMinutes,
+      catchment_zips: catchmentZips,
+      catchment_population: population,
+    };
+  }, null);
+
+  // Effective ZIPs: caller-provided, else derived from the trade-area catchment
+  // (limited to ZIPs with CDC coverage to keep Census calls bounded). Address-
+  // only demographics/CDC pulls therefore chain off the trade-area promise.
+  const zipsP = zips.length
+    ? Promise.resolve(zips)
+    : tradeAreaP.then(r => ((r.value && r.value.catchment_zips) || [])
+        .filter(z => cdcPlacesData?.[z]).slice(0, 40));
+
+  // ── Demographics + payer mix (deterministic Census pulls) ────────────────
+  const demographicsP = runBlock('demographics', async (t) => {
+    const effectiveZips = await zipsP;
+    const demoByZip = {};
+    if (!include.has('demographics') || !effectiveZips.length) return demoByZip;
     const zipList = effectiveZips.join(',');
     // Call A: population, age bands, median age, 65+.
     const ageVars = ['DP05_0001E', 'DP05_0018E', 'DP05_0024PE',
@@ -298,23 +490,34 @@ async function buildMarketData(body, deps) {
       'DP05_0008E', 'DP05_0008PE', 'DP05_0009E', 'DP05_0009PE', 'DP05_0010E', 'DP05_0010PE',
       'DP05_0011E', 'DP05_0011PE', 'DP05_0012E', 'DP05_0012PE', 'DP05_0013E', 'DP05_0013PE',
       'DP05_0014E', 'DP05_0014PE', 'DP05_0015E', 'DP05_0015PE', 'DP05_0016E', 'DP05_0016PE'];
-    const callA = await executeTool('census_demographics_lookup', {
-      year: '2024',
-      endpoint: `/profile?get=NAME,${ageVars.join(',')}&for=zip+code+tabulation+area:${zipList}`,
-    }, null, ctx);
-    sources.add(callA._source?.api || 'Census ACS 5-Year');
-    mergeCensusRows(demoByZip, callA._rawData || callA.data, CENSUS_FIELD_MAP, true);
-    if ((callA.warnings || []).length) warnings.push(...callA.warnings.map(w => (typeof w === 'string' ? w : w.message)));
-
     // Call B: income + payer mix (all-ages % + 19-64 counts for commercial cohort).
     const payVars = ['DP03_0062E', 'DP03_0096PE', 'DP03_0097PE', 'DP03_0098PE',
       'DP03_0099PE', 'DP03_0102E', 'DP03_0106E', 'DP03_0111E', 'DP03_0107E'];
-    const callB = await executeTool('census_demographics_lookup', {
-      year: '2024',
-      endpoint: `/profile?get=NAME,${payVars.join(',')}&for=zip+code+tabulation+area:${zipList}`,
-    }, null, ctx);
-    mergeCensusRows(demoByZip, callB._rawData || callB.data, CENSUS_FIELD_MAP, false);
-    if ((callB.warnings || []).length) warnings.push(...callB.warnings.map(w => (typeof w === 'string' ? w : w.message)));
+    // The two Census calls are independent — run them concurrently.
+    const [callA, callB] = await Promise.all([
+      executeTool('census_demographics_lookup', {
+        year: '2024',
+        endpoint: `/profile?get=NAME,${ageVars.join(',')}&for=zip+code+tabulation+area:${zipList}`,
+      }, null, blockCtx()),
+      executeTool('census_demographics_lookup', {
+        year: '2024',
+        endpoint: `/profile?get=NAME,${payVars.join(',')}&for=zip+code+tabulation+area:${zipList}`,
+      }, null, blockCtx()),
+    ]);
+    t.sources.add(callA._source?.api || 'Census ACS 5-Year');
+    const errA = envelopeError(callA);
+    const errB = envelopeError(callB);
+    if (errA && errB) throw new Error(errA);
+    if (errA) t.warnings.push(`demographics age/population pull failed: ${errA}`);
+    else {
+      mergeCensusRows(demoByZip, callA._rawData || callA.data, CENSUS_FIELD_MAP, true);
+      if ((callA.warnings || []).length) t.warnings.push(...callA.warnings.map(w => (typeof w === 'string' ? w : w.message)));
+    }
+    if (errB) t.warnings.push(`demographics income/payer pull failed: ${errB}`);
+    else {
+      mergeCensusRows(demoByZip, callB._rawData || callB.data, CENSUS_FIELD_MAP, false);
+      if ((callB.warnings || []).length) t.warnings.push(...callB.warnings.map(w => (typeof w === 'string' ? w : w.message)));
+    }
 
     // Derive 19-64 commercial/public % from clean counts (% of 19-64 population).
     for (const zip of Object.keys(demoByZip)) {
@@ -327,7 +530,334 @@ async function buildMarketData(body, deps) {
       }
       delete d._pop_19_64; delete d._priv_emp_19_64; delete d._priv_unemp_19_64; delete d._pub_emp_19_64;
     }
+    return demoByZip;
+  }, {});
+
+  // ── Health behaviors (CDC PLACES — local JSON, effectively instant) ──────
+  const healthBehaviorsP = runBlock('health_behaviors', async (t) => {
+    const effectiveZips = await zipsP;
+    if (!include.has('health_behaviors') || !effectiveZips.length) return [];
+    const cdc = await executeTool('cdc_health_behaviors',
+      { zip_codes: effectiveZips.join(',') }, null, blockCtx());
+    t.sources.add('CDC PLACES (BRFSS)');
+    const err = envelopeError(cdc);
+    if (err) throw new Error(err);
+    if ((cdc.warnings || []).length) t.warnings.push(...cdc.warnings.map(w => (typeof w === 'string' ? w : w.message)));
+    return buildHealthBehaviors(cdc._rawData || cdc.data);
+  }, []);
+
+  // ── Competitors + drive times (per service line, deduped) ────────────────
+  const COMPETITOR_MAX_MILES = 30; // drop statewide noise; keep the real market
+  const competitorsP = runBlock('competitors', async (t) => {
+    const out = { competitors: [], ownNetwork: [] };
+    if (!include.has('competitors')) return out;
+    // Anchor the Places query to a city near the origin. Prefer an explicit city
+    // from the address; otherwise reverse-geocode the origin to a locality.
+    let cityHint = (address && address.split(',')[1]) ? address.split(',')[1].trim() : null;
+    if (!cityHint && origin) {
+      const rev = await executeTool('geocode_address',
+        { address: encodeURIComponent(`${origin.lat},${origin.lng}`) }, null, blockCtx());
+      const rr = rev._rawData || rev.data;
+      const comps = Array.isArray(rr) ? rr[0]?.address_components : rr?.address_components;
+      cityHint = comps?.find(c => c.types?.includes('locality'))?.long_name || null;
+    }
+    cityHint = cityHint || 'Miami';
+    const terms = serviceLines.length
+      ? serviceLines.map(serviceLineToSearchTerm)
+      : ['hospital'];
+    // All per-service-line text searches in parallel; results folded back in
+    // term order so dedupe stays deterministic.
+    const searches = await Promise.all(terms.map(async (term) => {
+      const q = encodeURIComponent(`${term} near ${cityHint} FL`).replace(/%20/g, '+');
+      const comp = await executeTool('competitor_ratings_reviews', { query: q }, null, blockCtx());
+      t.sources.add('Google Places Text Search');
+      return { term, comp };
+    }));
+    const seen = new Map();
+    let searchFailures = 0;
+    for (const { term, comp } of searches) {
+      const err = envelopeError(comp);
+      if (err) {
+        searchFailures++;
+        t.warnings.push(`competitor search "${term}" failed: ${err}`);
+        continue;
+      }
+      const places = comp._rawData || comp.data || [];
+      for (const p of (Array.isArray(places) ? places : [])) {
+        const key = p.place_id || p.name;
+        if (!key || seen.has(key)) continue;
+        const lat = p.geometry?.location?.lat;
+        const lng = p.geometry?.location?.lng;
+        let distance_mi = null;
+        if (origin && lat && lng) distance_mi = round(deps.haversineDistance(origin.lat, origin.lng, lat, lng), 1);
+        // Drop out-of-market results (statewide chains the text search can surface).
+        if (origin && distance_mi != null && distance_mi > COMPETITOR_MAX_MILES) continue;
+        seen.set(key, {
+          name: p.name,
+          rating: p.rating ?? null,
+          reviews: p.user_ratings_total ?? null,
+          address: p.formatted_address || '',
+          place_id: p.place_id || null,
+          lat: lat ?? null,
+          lng: lng ?? null,
+          service_line: term,
+          distance_mi,
+          drive_time_min: null,
+        });
+      }
+    }
+    if (searchFailures === searches.length && searches.length) {
+      throw new Error(`all ${searches.length} competitor searches failed`);
+    }
+    // Split BH-owned facilities out of the competitor set. They are not
+    // competitors; surface them separately so the planner knows BH's footprint
+    // and never writes "our competitor is Baptist Health ...".
+    for (const c of seen.values()) {
+      if (isBhOwned(c.name)) out.ownNetwork.push({ ...c, own: true });
+      else out.competitors.push(c);
+    }
+
+    // Drive times via batched Distance Matrix calls (10 destinations max each),
+    // batches in parallel.
+    if (include.has('drive_times') && origin && out.competitors.length) {
+      const withCoords = out.competitors.filter(c => c.lat && c.lng);
+      const batches = [];
+      for (let i = 0; i < withCoords.length; i += 10) batches.push(withCoords.slice(i, i + 10));
+      await Promise.all(batches.map(async (batch) => {
+        const dests = batch.map(c => `${c.lat},${c.lng}`).join('|');
+        const dm = await executeTool('calculate_drive_times',
+          { origins: `${origin.lat},${origin.lng}`, destinations: dests }, null, blockCtx());
+        t.sources.add('Google Distance Matrix API');
+        const err = envelopeError(dm);
+        if (err) {
+          t.warnings.push(`drive-time batch failed: ${err}`);
+          return;
+        }
+        const flat = dm._rawData || dm.data || [];
+        for (let j = 0; j < batch.length; j++) {
+          const el = Array.isArray(flat) ? flat[j] : null;
+          if (el && el.duration_seconds != null) {
+            batch[j].drive_time_min = round(el.duration_seconds / 60, 1);
+          }
+        }
+      }));
+    }
+    // Rank by rating × reviews so the planner gets the strongest competitors first.
+    out.competitors.sort((a, b) => (b.rating || 0) * (b.reviews || 0) - (a.rating || 0) * (a.reviews || 0));
+    return out;
+  }, { competitors: [], ownNetwork: [] });
+
+  // Drive-time tiering (additive): only when both competitors and drive_times
+  // were requested; tierCompetitors returns null when no drive times exist.
+  const tieredP = competitorsP.then(r =>
+    (include.has('competitors') && include.has('drive_times'))
+      ? tierCompetitors(r.value.competitors)
+      : null
+  );
+
+  // ── BH locations near origin ──────────────────────────────────────────────
+  const bhLocationsP = runBlock('bh_locations', async (t) => {
+    if (!include.has('bh_locations') || !origin) return [];
+    const broad = '%7B%22closed%22%3A%7B%22%24eq%22%3Afalse%7D%7D';
+    const loc = await executeTool('baptist_health_location_lookup', { filter: broad }, null, blockCtx());
+    t.sources.add('Yext Live API');
+    const err = envelopeError(loc);
+    if (err) throw new Error(err);
+    const ents = loc._rawData || loc.data || [];
+    return (Array.isArray(ents) ? ents : [])
+      .filter(e => e.geocodedCoordinate?.latitude)
+      .map(e => ({
+        name: e.name,
+        lat: e.geocodedCoordinate.latitude,
+        lng: e.geocodedCoordinate.longitude,
+        address: e.address ? `${e.address.line1}, ${e.address.city}` : '',
+        care_type: /Urgent|Same-Day|Express/i.test(e.name || '') ? 'urgent'
+          : /Hospital/i.test(e.name || '') ? 'hospital' : 'specialty',
+        distance_mi: round(deps.haversineDistance(origin.lat, origin.lng, e.geocodedCoordinate.latitude, e.geocodedCoordinate.longitude), 1),
+      }))
+      .filter(e => e.distance_mi <= 25)
+      .sort((a, b) => a.distance_mi - b.distance_mi)
+      .slice(0, 25);
+  }, []);
+
+  // ── Physician roster (per service line, parallel across specialties) ─────
+  const physiciansP = runBlock('physicians', async (t) => {
+    if (!include.has('physicians') || !serviceLines.length) return [];
+    const cityHint = address && address.split(',')[1] ? address.split(',')[1].trim() : null;
+    const specCalls = [];
+    for (const line of serviceLines) {
+      const spec = serviceLineToSpecialty(line, SPECIALTY_SYNONYMS);
+      const specs = Array.isArray(spec) ? spec : (spec ? [spec] : []);
+      for (const s of specs) specCalls.push({ line, s });
+    }
+    if (!specCalls.length) return [];
+    const results = await Promise.all(specCalls.map(async ({ line, s }) => {
+      const filter = buildPhysicianFilter(s, cityHint);
+      const phy = await executeTool('baptist_health_physician_lookup', { filter }, null, blockCtx());
+      t.sources.add('Yext Live API (Physicians)');
+      return { line, s, phy };
+    }));
+    const seen = new Set();
+    const physicians = [];
+    let failures = 0;
+    for (const { line, s, phy } of results) {
+      const err = envelopeError(phy);
+      if (err) {
+        failures++;
+        t.warnings.push(`physician lookup "${s}" failed: ${err}`);
+        continue;
+      }
+      const ents = phy._rawData || phy.data || [];
+      for (const e of (Array.isArray(ents) ? ents : [])) {
+        const id = e.npi || e.name;
+        if (!id || seen.has(id)) continue;
+        seen.add(id);
+        physicians.push({
+          name: e.name,
+          specialty: Array.isArray(e.c_listOfSpecialties) ? e.c_listOfSpecialties.join(', ') : (e.c_listOfSpecialties || s),
+          service_line: line,
+          accepting: e.acceptingNewPatients ?? null,
+          rating: e.c_averageReviewRating ?? null,
+          reviews: e.c_reviewCount ?? null,
+          city: e.address?.city || null,
+        });
+      }
+    }
+    if (failures === results.length && results.length) {
+      throw new Error(`all ${results.length} physician lookups failed`);
+    }
+    return physicians.slice(0, 60);
+  }, []);
+
+  // ── Permits (competitive threats) ─────────────────────────────────────────
+  const permitsP = runBlock('permits', async (t) => {
+    if (!include.has('permits')) return [];
+    const perm = await executeTool('lookup_permits', { active_only: true }, null, blockCtx());
+    t.sources.add('MRA Permit Tracker');
+    const err = envelopeError(perm);
+    if (err) throw new Error(err);
+    const pData = perm._rawData || perm.data || {};
+    return (pData.permits || []).slice(0, 50).map(p => ({
+      project_name: p.project_name || p.name || null,
+      health_system: p.health_system || null,
+      county: p.county || null,
+      status: p.status || null,
+      address: p.address || null,
+      last_status_change_date: p.last_status_change_date || null,
+    }));
+  }, []);
+
+  // ── Market news (Firecrawl web research) ─────────────────────────────────
+  // Recent market developments, competitor moves, partnerships - the qualitative
+  // context the data blocks don't carry. Returned as sourced, cited items.
+  const newsP = runBlock('news', async (t) => {
+    if (!include.has('news')) return [];
+    const place = address || (zips.length ? `ZIP code ${zips[0]} area, Florida` : 'South Florida');
+    const slLabel = serviceLines.length ? serviceLines.join(' and ') : 'healthcare';
+    const q = `recent news and market developments in ${slLabel} near ${place} 2025 2026 new facility competitor expansion partnership merger acquisition`;
+    const wr = await executeTool('web_research', { research_query: q }, null, blockCtx());
+    t.sources.add('Firecrawl Web Search');
+    const err = envelopeError(wr);
+    if (err) throw new Error(err);
+    const items = wr._rawData || wr.data || [];
+    const news = (Array.isArray(items) ? items : []).slice(0, 6).map(r => ({
+      title: r.title || null,
+      url: r.url || null,
+      summary: r.description || null,
+    }));
+    // Deepen the top stories: read the full article so the plan gets a real,
+    // sourced excerpt, not just the search snippet. Bounded to the top 2.
+    const toRead = news.filter(n => n.url).slice(0, 2);
+    await Promise.all(toRead.map(async (n) => {
+      try {
+        const rp = await executeTool('read_page', { url: n.url }, null, blockCtx());
+        const content = rp._rawData?.content || rp.data?.content || '';
+        const ex = newsExcerpt(content);
+        if (ex) { n.excerpt = ex; t.sources.add('Jina Reader / Firecrawl Scrape'); }
+      } catch (e) { /* keep the snippet-only item */ }
+    }));
+    return news;
+  }, []);
+
+  // ── Competitor review themes (DataForSEO sentiment + themes) ─────────────
+  // Not just a star rating - what patients actually say about the top
+  // competitors. Chains off the competitors block (and its tiering) and runs a
+  // bounded, budgeted review pull per competitor.
+  const reviewThemesP = runBlock('review_themes', async (t) => {
+    if (!include.has('review_themes')) return [];
+    const { competitors } = (await competitorsP).value;
+    if (!competitors.length) return [];
+    // Prefer the drive-time tiers (in-market first, then adjacent) so review
+    // themes describe the competitors the market actually drives to.
+    const tiered = await tieredP;
+    const orderedPool = tiered ? [...tiered.in_market, ...tiered.adjacent] : [];
+    const top = (orderedPool.length ? orderedPool : competitors).slice(0, 3);
+    const limit = Number(body.reviews_limit) > 0 ? Number(body.reviews_limit) : 120;
+    const maxWaitS = Number(process.env.MD_REVIEWS_BUDGET_S) || 120;
+    const results = await Promise.all(top.map(async (c) => {
+      try {
+        const rr = await executeTool('google_reviews_report',
+          { query: c.name, reviewsLimit: limit, include_csv: false, max_wait_s: maxWaitS }, null, blockCtx());
+        const err = envelopeError(rr);
+        if (err) {
+          t.warnings.push(`review_themes for "${c.name}" failed: ${err}`);
+          return null;
+        }
+        const md = rr.metadata || rr._rawData || {};
+        return {
+          name: c.name,
+          rating: c.rating ?? md.avg_rating ?? null,
+          reviews_analyzed: md.total_reviews_analyzed ?? null,
+          reviews_available: md.total_reviews_available ?? c.reviews ?? null,
+          top_themes: md.top_themes || [],
+          sentiment_breakdown: md.sentiment_breakdown || null,
+          mentioned_names: (md.mentioned_names || []).slice(0, 10),
+        };
+      } catch (e) {
+        t.warnings.push(`review_themes for "${c.name}" failed: ${e.message}`);
+        return null;
+      }
+    }));
+    const reviewThemes = results.filter(Boolean);
+    if (reviewThemes.length) t.sources.add('DataForSEO Google Reviews + theme/sentiment analysis');
+    return reviewThemes;
+  }, []);
+
+  // ── Await everything (concurrently) ──────────────────────────────────────
+  const [
+    tradeAreaR, demographicsR, healthBehaviorsR, competitorsR,
+    bhLocationsR, physiciansR, permitsR, newsR, reviewThemesR,
+  ] = await Promise.all([
+    tradeAreaP, demographicsP, healthBehaviorsP, competitorsP,
+    bhLocationsP, physiciansP, permitsP, newsP, reviewThemesP,
+  ]);
+  const competitorsTiered = await tieredP;
+  const effectiveZips = await zipsP;
+
+  const tradeArea = tradeAreaR.value;
+  const demoByZip = demographicsR.value || {};
+  const healthBehaviors = healthBehaviorsR.value;
+  const competitors = competitorsR.value.competitors;
+  const ownNetwork = competitorsR.value.ownNetwork;
+  const bhLocations = bhLocationsR.value;
+  const physicians = physiciansR.value;
+  const permits = permitsR.value;
+  const news = newsR.value;
+  const reviewThemes = reviewThemesR.value;
+
+  // Merge warnings + sources in a stable block order (matches the old serial
+  // execution order) so responses are deterministic under concurrency.
+  const blockResults = [
+    tradeAreaR, demographicsR, healthBehaviorsR, competitorsR,
+    bhLocationsR, physiciansR, permitsR, newsR, reviewThemesR,
+  ];
+  const warnings = [...originWarnings];
+  const sources = new Set(originSources);
+  for (const r of blockResults) {
+    warnings.push(...r.warnings);
+    for (const s of r.sources) sources.add(s);
   }
+  const blocksFailed = blockResults.filter(r => r.failed).map(r => r.name);
 
   // Shape demographics[] (+ split payer_mix into its own block per scope).
   const demographics = [];
@@ -354,233 +884,10 @@ async function buildMarketData(body, deps) {
     payerMix.push(payer);
   }
 
-  // ── 4. Health behaviors (CDC PLACES) ───────────────────────────────────
-  let healthBehaviors = [];
-  if (include.has('health_behaviors') && effectiveZips.length) {
-    const cdc = await executeTool('cdc_health_behaviors',
-      { zip_codes: effectiveZips.join(',') }, null, ctx);
-    sources.add('CDC PLACES (BRFSS)');
-    healthBehaviors = buildHealthBehaviors(cdc._rawData || cdc.data);
-    if ((cdc.warnings || []).length) warnings.push(...cdc.warnings.map(w => (typeof w === 'string' ? w : w.message)));
-  }
-
-  // ── 5. Competitors + drive times (per service line, deduped) ────────────
-  let competitors = [];
-  let ownNetwork = []; // BH-owned facilities the competitor search surfaced
-  const COMPETITOR_MAX_MILES = 30; // drop statewide noise; keep the real market
-  if (include.has('competitors')) {
-    // Anchor the Places query to a city near the origin. Prefer an explicit city
-    // from the address; otherwise reverse-geocode the origin to a locality.
-    let cityHint = (address && address.split(',')[1]) ? address.split(',')[1].trim() : null;
-    if (!cityHint && origin) {
-      const rev = await executeTool('geocode_address',
-        { address: encodeURIComponent(`${origin.lat},${origin.lng}`) }, null, ctx);
-      const rr = rev._rawData || rev.data;
-      const comps = Array.isArray(rr) ? rr[0]?.address_components : rr?.address_components;
-      cityHint = comps?.find(c => c.types?.includes('locality'))?.long_name || null;
-    }
-    cityHint = cityHint || 'Miami';
-    const terms = serviceLines.length
-      ? serviceLines.map(serviceLineToSearchTerm)
-      : ['hospital'];
-    const seen = new Map();
-    for (const term of terms) {
-      const q = encodeURIComponent(`${term} near ${cityHint} FL`).replace(/%20/g, '+');
-      const comp = await executeTool('competitor_ratings_reviews', { query: q }, null, ctx);
-      sources.add('Google Places Text Search');
-      const places = comp._rawData || comp.data || [];
-      for (const p of (Array.isArray(places) ? places : [])) {
-        const key = p.place_id || p.name;
-        if (!key || seen.has(key)) continue;
-        const lat = p.geometry?.location?.lat;
-        const lng = p.geometry?.location?.lng;
-        let distance_mi = null;
-        if (origin && lat && lng) distance_mi = round(deps.haversineDistance(origin.lat, origin.lng, lat, lng), 1);
-        // Drop out-of-market results (statewide chains the text search can surface).
-        if (origin && distance_mi != null && distance_mi > COMPETITOR_MAX_MILES) continue;
-        seen.set(key, {
-          name: p.name,
-          rating: p.rating ?? null,
-          reviews: p.user_ratings_total ?? null,
-          address: p.formatted_address || '',
-          place_id: p.place_id || null,
-          lat: lat ?? null,
-          lng: lng ?? null,
-          service_line: term,
-          distance_mi,
-          drive_time_min: null,
-        });
-      }
-    }
-    // Split BH-owned facilities out of the competitor set. They are not
-    // competitors; surface them separately so the planner knows BH's footprint
-    // and never writes "our competitor is Baptist Health ...".
-    for (const c of seen.values()) {
-      if (isBhOwned(c.name)) ownNetwork.push({ ...c, own: true });
-      else competitors.push(c);
-    }
-
-    // Drive times in one batched Distance Matrix call (10 destinations max each).
-    if (include.has('drive_times') && origin && competitors.length) {
-      const withCoords = competitors.filter(c => c.lat && c.lng);
-      for (let i = 0; i < withCoords.length; i += 10) {
-        const batch = withCoords.slice(i, i + 10);
-        const dests = batch.map(c => `${c.lat},${c.lng}`).join('|');
-        const dm = await executeTool('calculate_drive_times',
-          { origins: `${origin.lat},${origin.lng}`, destinations: dests }, null, ctx);
-        sources.add('Google Distance Matrix API');
-        const flat = dm._rawData || dm.data || [];
-        for (let j = 0; j < batch.length; j++) {
-          const el = Array.isArray(flat) ? flat[j] : null;
-          if (el && el.duration_seconds != null) {
-            batch[j].drive_time_min = round(el.duration_seconds / 60, 1);
-          }
-        }
-      }
-    }
-    // Rank by rating × reviews so the planner gets the strongest competitors first.
-    competitors.sort((a, b) => (b.rating || 0) * (b.reviews || 0) - (a.rating || 0) * (a.reviews || 0));
-  }
-
   const driveTimes = include.has('drive_times')
     ? competitors.filter(c => c.drive_time_min != null)
         .map(c => ({ name: c.name, drive_time_min: c.drive_time_min, distance_mi: c.distance_mi }))
     : [];
-
-  // ── 6. BH locations near origin ─────────────────────────────────────────
-  let bhLocations = [];
-  if (include.has('bh_locations') && origin) {
-    const broad = '%7B%22closed%22%3A%7B%22%24eq%22%3Afalse%7D%7D';
-    const loc = await executeTool('baptist_health_location_lookup', { filter: broad }, null, ctx);
-    sources.add('Yext Live API');
-    const ents = loc._rawData || loc.data || [];
-    const nearby = (Array.isArray(ents) ? ents : [])
-      .filter(e => e.geocodedCoordinate?.latitude)
-      .map(e => ({
-        name: e.name,
-        lat: e.geocodedCoordinate.latitude,
-        lng: e.geocodedCoordinate.longitude,
-        address: e.address ? `${e.address.line1}, ${e.address.city}` : '',
-        care_type: /Urgent|Same-Day|Express/i.test(e.name || '') ? 'urgent'
-          : /Hospital/i.test(e.name || '') ? 'hospital' : 'specialty',
-        distance_mi: round(deps.haversineDistance(origin.lat, origin.lng, e.geocodedCoordinate.latitude, e.geocodedCoordinate.longitude), 1),
-      }))
-      .filter(e => e.distance_mi <= 25)
-      .sort((a, b) => a.distance_mi - b.distance_mi)
-      .slice(0, 25);
-    bhLocations = nearby;
-  }
-
-  // ── 7. Physician roster (per service line) ──────────────────────────────
-  let physicians = [];
-  if (include.has('physicians') && serviceLines.length) {
-    const cityHint = address && address.split(',')[1] ? address.split(',')[1].trim() : null;
-    const seen = new Set();
-    for (const line of serviceLines) {
-      const spec = serviceLineToSpecialty(line, SPECIALTY_SYNONYMS);
-      const specs = Array.isArray(spec) ? spec : (spec ? [spec] : []);
-      for (const s of specs) {
-        const filter = buildPhysicianFilter(s, cityHint);
-        const phy = await executeTool('baptist_health_physician_lookup', { filter }, null, ctx);
-        sources.add('Yext Live API (Physicians)');
-        const ents = phy._rawData || phy.data || [];
-        for (const e of (Array.isArray(ents) ? ents : [])) {
-          const id = e.npi || e.name;
-          if (!id || seen.has(id)) continue;
-          seen.add(id);
-          physicians.push({
-            name: e.name,
-            specialty: Array.isArray(e.c_listOfSpecialties) ? e.c_listOfSpecialties.join(', ') : (e.c_listOfSpecialties || s),
-            service_line: line,
-            accepting: e.acceptingNewPatients ?? null,
-            rating: e.c_averageReviewRating ?? null,
-            reviews: e.c_reviewCount ?? null,
-            city: e.address?.city || null,
-          });
-        }
-      }
-    }
-    physicians = physicians.slice(0, 60);
-  }
-
-  // ── 8. Permits (competitive threats) ────────────────────────────────────
-  let permits = [];
-  if (include.has('permits')) {
-    const perm = await executeTool('lookup_permits', { active_only: true }, null, ctx);
-    sources.add('MRA Permit Tracker');
-    const pData = perm._rawData || perm.data || {};
-    permits = (pData.permits || []).slice(0, 50).map(p => ({
-      project_name: p.project_name || p.name || null,
-      health_system: p.health_system || null,
-      county: p.county || null,
-      status: p.status || null,
-      address: p.address || null,
-      last_status_change_date: p.last_status_change_date || null,
-    }));
-  }
-
-  // ── 9. Market news (Firecrawl web research) ─────────────────────────────
-  // Recent market developments, competitor moves, partnerships - the qualitative
-  // context the data blocks don't carry. Returned as sourced, cited items.
-  let news = [];
-  if (include.has('news')) {
-    const place = address || (zips.length ? `ZIP code ${zips[0]} area, Florida` : 'South Florida');
-    const slLabel = serviceLines.length ? serviceLines.join(' and ') : 'healthcare';
-    const q = `recent news and market developments in ${slLabel} near ${place} 2025 2026 new facility competitor expansion partnership merger acquisition`;
-    try {
-      const wr = await executeTool('web_research', { research_query: q }, null, ctx);
-      sources.add('Firecrawl Web Search');
-      const items = wr._rawData || wr.data || [];
-      news = (Array.isArray(items) ? items : []).slice(0, 6).map(r => ({
-        title: r.title || null,
-        url: r.url || null,
-        summary: r.description || null,
-      }));
-      // Deepen the top stories: read the full article so the plan gets a real,
-      // sourced excerpt, not just the search snippet. Bounded to the top 2.
-      const toRead = news.filter(n => n.url).slice(0, 2);
-      await Promise.all(toRead.map(async (n) => {
-        try {
-          const rp = await executeTool('read_page', { url: n.url }, null, ctx);
-          const content = rp._rawData?.content || rp.data?.content || '';
-          const ex = newsExcerpt(content);
-          if (ex) { n.excerpt = ex; sources.add('Jina Reader / Firecrawl Scrape'); }
-        } catch (e) { /* keep the snippet-only item */ }
-      }));
-    } catch (e) {
-      warnings.push(`news lookup failed: ${e.message}`);
-    }
-  }
-
-  // ── 10. Competitor review themes (DataForSEO sentiment + themes) ─────────
-  // Not just a star rating - what patients actually say about the top competitors
-  // (themes, sentiment split, named providers). Bounded to the top competitors
-  // and a modest review pull; cached per location by the reviews tool.
-  let reviewThemes = [];
-  if (include.has('review_themes') && competitors.length) {
-    const top = competitors.slice(0, 3);
-    const limit = Number(body.reviews_limit) > 0 ? Number(body.reviews_limit) : 120;
-    const results = await Promise.all(top.map(async (c) => {
-      try {
-        const rr = await executeTool('google_reviews_report', { query: c.name, reviewsLimit: limit, include_csv: false }, null, ctx);
-        const md = rr.metadata || rr._rawData || {};
-        return {
-          name: c.name,
-          rating: c.rating ?? md.avg_rating ?? null,
-          reviews_analyzed: md.total_reviews_analyzed ?? null,
-          reviews_available: md.total_reviews_available ?? c.reviews ?? null,
-          top_themes: md.top_themes || [],
-          sentiment_breakdown: md.sentiment_breakdown || null,
-          mentioned_names: (md.mentioned_names || []).slice(0, 10),
-        };
-      } catch (e) {
-        warnings.push(`review_themes for "${c.name}" failed: ${e.message}`);
-        return null;
-      }
-    }));
-    reviewThemes = results.filter(Boolean);
-    if (reviewThemes.length) sources.add('DataForSEO Google Reviews + theme/sentiment analysis');
-  }
 
   // ── Evidence coverage summary ───────────────────────────────────────────
   const evidenceCoverage = {
@@ -595,6 +902,7 @@ async function buildMarketData(body, deps) {
     physicians_found: physicians.length,
     news_found: news.length,
     review_themes_found: reviewThemes.length,
+    blocks_failed: blocksFailed,
   };
 
   return {
@@ -605,6 +913,7 @@ async function buildMarketData(body, deps) {
     payer_mix: payerMix,
     health_behaviors: healthBehaviors,
     competitors,
+    competitors_tiered: competitorsTiered,
     own_network: ownNetwork,
     drive_times: driveTimes,
     bh_locations: bhLocations,
@@ -613,6 +922,7 @@ async function buildMarketData(body, deps) {
     news,
     review_themes: reviewThemes,
     evidence_coverage: evidenceCoverage,
+    field_definitions: FIELD_DEFINITIONS,
     sources: [...sources],
     warnings,
     generated_at: new Date().toISOString(),
@@ -628,7 +938,7 @@ function round(n, d = 1) {
 // ── Simple param-keyed cache (deterministic params → identical response) ────
 function cacheKey(body) {
   const norm = {
-    zips: (body.zips || []).map(String).sort(),
+    zips: normalizeZips(body.zips),
     address: body.address || null,
     radius: body.radius || body.radius_minutes || null,
     service_lines: (body.service_lines || []).map(s => String(s).toLowerCase()).sort(),
@@ -673,6 +983,12 @@ module.exports = {
   buildMarketData,
   serviceLineToSpecialty,
   serviceLineToSearchTerm,
+  tierCompetitors,
+  isIndividualPractitioner,
   // exported for testing
-  _internals: { mergeCensusRows, buildHealthBehaviors, normalizeRadius, cacheKey },
+  _internals: {
+    mergeCensusRows, buildHealthBehaviors, normalizeRadius, cacheKey,
+    normalizeZips, submarketFromAddress, envelopeError,
+    FIELD_DEFINITIONS,
+  },
 };
