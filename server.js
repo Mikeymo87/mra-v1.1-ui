@@ -421,7 +421,7 @@ const tools = [
   },
   {
     name: 'competitor_ratings_reviews',
-    description: 'Google Places competitor snapshots (stars, review count, address, place_id). TWO MODES: (1) ANCHORED - pass location="lat,lng" (geocode the site address first!) and results come back NEAREST-FIRST by real distance; ALWAYS use this mode when the user names a site, address, or "near X" - it finds the small nearby competitor a fame-ranked search misses. (2) Unanchored text search (query only) ranks by prominence city-wide - only for brand-level questions with no anchor point. NOT for full review text — use google_reviews_report for that.',
+    description: 'Google Places competitor snapshots (stars, review count, address, place_id). TWO MODES: (1) ANCHORED - pass location="lat,lng" (geocode the site address first!) and results come back NEAREST-FIRST by real distance; ALWAYS use this mode when the user names a site, address, or "near X" - it finds the small nearby competitor a fame-ranked search misses. (2) Unanchored text search (query only) ranks by prominence city-wide - only for brand-level questions with no anchor point. NOT for full review text - use google_reviews_report for that.',
     input_schema: {
       type: 'object',
       properties: {
