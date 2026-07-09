@@ -55,7 +55,10 @@ const FIELD_DEFINITIONS = {
     public_18_64_pct: 'Employed 19-64 population with public coverage (ACS DP03_0107E) as a share of the total 19-64 population (DP03_0102E), same 19-64 denominator.',
   },
   health_behaviors: 'CDC PLACES model-based estimates (BRFSS), % of adults per ZIP.',
-  competitors: 'Google Places text search per service line, 30-mile cap; ranked by rating x reviews. Use competitors_tiered for drive-time market tiers.',
+  competitors: 'Google Places search per service line, 30-mile cap. With an address the pull is ANCHORED (nearest-first Nearby Search); without one it falls back to a city-level prominence text search - check pull_quality.competitors.method. Use competitors_tiered_by_line for per-service-line drive-time tiers.',
+  competitors_tiered_by_line: 'One tiered competitor set PER service line, each with category-appropriate drive-time caps (convenience categories cap tighter and demote 20+ min results to broader_context_summary - context, never table rows). For a multi-service-line facility, present one table per line from this field.',
+  own_network: 'Baptist Health\'s OWN nearby facilities from the full Yext cache (never competitors). overlapping_service_lines non-empty = a same-service BH site is nearby: weigh network synergy AND cannibalization; the plan must acknowledge these sites.',
+  pull_quality: 'How each pull actually ran (search method, anchor, result counts, trims, data_logic_version). An unanchored method or tiny result counts for an address-anchored plan means the pull is weak - re-pull with the address rather than writing around it.',
   trade_area: 'Drive-time isochrone catchment; population from CDC PLACES ZIP populations.',
 };
 
@@ -88,6 +91,49 @@ function serviceLineToSearchTerm(label) {
   if (/imaging|radiology|mri/.test(l)) return 'imaging center';
   if (/surgery|surgical/.test(l)) return 'surgery center';
   return l || 'healthcare';
+}
+
+// Bump when the market-data logic changes in a way that should invalidate
+// cached responses (also surfaced in pull_quality so consumers can gate on it).
+const DATA_LOGIC_VERSION = 'md-2026-07-09';
+
+// Per-category drive-time tolerance for the tier tables. Convenience
+// categories are chosen on proximity - a 20+ minute "competitor" is context,
+// not a table row. Destination/specialty categories keep the wider default.
+function categoryCapsFor(term) {
+  const t = (term || '').toLowerCase();
+  if (t === 'urgent care') return { inMarketMax: 8, adjacentMax: 12, dropBroader: true };
+  if (t === 'imaging center') return { inMarketMax: 10, adjacentMax: 15, dropBroader: true };
+  if (t === 'primary care') return { inMarketMax: 10, adjacentMax: 15, dropBroader: true };
+  return { inMarketMax: 10, adjacentMax: 20, dropBroader: false };
+}
+
+// Map a planner service-line label to a Yext facility-name matcher, so
+// own_network can say WHICH nearby BH sites overlap the requested service.
+// Keyword vocabulary per the verified Yext list in CLAUDE.md.
+function serviceLineToYextRe(label) {
+  const l = (label || '').toLowerCase().trim();
+  if (/urgent|same.?day|walk/.test(l)) return /urgent care|same.?day|express/i;
+  if (/imaging|radiology|mri/.test(l)) return /imaging|diagnostic/i;
+  if (/ortho|sports med|joint|spine/.test(l)) return /orthop|spine|sports/i;
+  if (/cardio|heart|vascular/.test(l)) return /cardio|vascular|heart/i;
+  if (/neuro|brain/.test(l)) return /neuro/i;
+  if (/cancer|oncol/.test(l)) return /cancer|oncolog/i;
+  if (/primary|family|internal/.test(l)) return /primary care/i;
+  if (/surgery|surgical/.test(l)) return /surgery|surgical|endoscopy/i;
+  if (/emergency|\ber\b/.test(l)) return /emergency/i;
+  return null;
+}
+
+// Care-type label for a BH facility name (coarse; used for display/grouping).
+function bhCareType(name) {
+  const n = name || '';
+  if (/urgent|same.?day|express/i.test(n)) return 'urgent';
+  if (/imaging|diagnostic/i.test(n)) return 'imaging';
+  if (/emergency/i.test(n)) return 'emergency';
+  if (/hospital/i.test(n)) return 'hospital';
+  if (/primary care/i.test(n)) return 'primary care';
+  return 'specialty';
 }
 
 // Baptist Health South Florida owned brands. A competitor text search surfaces
@@ -361,7 +407,7 @@ function tierCompetitors(competitors, { inMarketMax = 10, adjacentMax = 20, gapR
     broader,
     individual_practitioners: individuals,
     nearest_comparable: nearestComparable,
-    method: `Destination facilities sorted by drive time from origin. IN-MARKET = <=${inMarketMax} min and before the first drive-time jump (next > ${gapRatio}x prev AND gap >= ${gapMinAbs} min). ADJACENT = remaining <=${adjacentMax} min, labeled by submarket city. BROADER = >${adjacentMax} min. Individual practitioners are split out, never dropped. Within each tier, entries rank by rating x reviews; rating never promotes a distant facility into the market. Caveat: the underlying Google Places text search is capped at the top 10 results per service-line term (by rating x reviews), so tiers reflect the strongest visible competitors, not an exhaustive census.`,
+    method: `Destination facilities sorted by drive time from origin. IN-MARKET = <=${inMarketMax} min and before the first drive-time jump (next > ${gapRatio}x prev AND gap >= ${gapMinAbs} min). ADJACENT = remaining <=${adjacentMax} min, labeled by submarket city. BROADER = >${adjacentMax} min. Individual practitioners are split out, never dropped. Within each tier, entries rank by rating x reviews; rating never promotes a distant facility into the market. Caveat: results reflect Google Places visibility (address-anchored pulls keep the ~15 NEAREST per service-line term; unanchored pulls keep the top 10 by rating x reviews), so tiers are the nearest known visible competitors, not an exhaustive census.`,
   };
 }
 
@@ -565,27 +611,50 @@ async function buildMarketData(body, deps) {
     const terms = serviceLines.length
       ? serviceLines.map(serviceLineToSearchTerm)
       : ['hospital'];
-    // All per-service-line text searches in parallel; results folded back in
-    // term order so dedupe stays deterministic.
+    // All per-service-line searches in parallel; results folded back in
+    // term order so dedupe stays deterministic. With an origin the search is
+    // ANCHORED (Nearby Search, nearest-first) - the fix for the July 9 recall
+    // failure where a metro-level text search returned famous-but-far results
+    // and missed the MD Now across the street.
     const searches = await Promise.all(terms.map(async (term) => {
       const q = encodeURIComponent(`${term} near ${cityHint} FL`).replace(/%20/g, '+');
-      const comp = await executeTool('competitor_ratings_reviews', { query: q }, null, blockCtx());
-      t.sources.add('Google Places Text Search');
+      const params = origin
+        ? { query: q, location: `${origin.lat},${origin.lng}` }
+        : { query: q };
+      const comp = await executeTool('competitor_ratings_reviews', params, null, blockCtx());
+      t.sources.add(origin ? 'Google Places Nearby Search (distance-ranked)' : 'Google Places Text Search');
       return { term, comp };
     }));
     const seen = new Map();
     let searchFailures = 0;
+    out.pullQuality = {
+      method: origin ? 'anchored-nearby-search (rankby=distance)' : 'city-level-text-search (prominence-ranked)',
+      origin_used: origin ? { lat: origin.lat, lng: origin.lng } : null,
+      per_term: {},
+    };
     for (const { term, comp } of searches) {
       const err = envelopeError(comp);
       if (err) {
         searchFailures++;
         t.warnings.push(`competitor search "${term}" failed: ${err}`);
+        out.pullQuality.per_term[term] = { failed: true };
         continue;
       }
       const places = comp._rawData || comp.data || [];
+      out.pullQuality.per_term[term] = {
+        results_returned: Array.isArray(places) ? places.length : 0,
+        trim: comp.filtering || null,
+      };
       for (const p of (Array.isArray(places) ? places : [])) {
         const key = p.place_id || p.name;
-        if (!key || seen.has(key)) continue;
+        if (!key) continue;
+        if (seen.has(key)) {
+          // Same facility matched another service-line search - keep ALL tags
+          // so per-line tiering can place it in every relevant table.
+          const row = seen.get(key);
+          if (!row.service_lines.includes(term)) row.service_lines.push(term);
+          continue;
+        }
         const lat = p.geometry?.location?.lat;
         const lng = p.geometry?.location?.lng;
         let distance_mi = null;
@@ -600,7 +669,8 @@ async function buildMarketData(body, deps) {
           place_id: p.place_id || null,
           lat: lat ?? null,
           lng: lng ?? null,
-          service_line: term,
+          service_line: term,           // first matching term (legacy field)
+          service_lines: [term],        // ALL matching terms (additive)
           distance_mi,
           drive_time_min: null,
         });
@@ -612,15 +682,70 @@ async function buildMarketData(body, deps) {
     // Split BH-owned facilities out of the competitor set. They are not
     // competitors; surface them separately so the planner knows BH's footprint
     // and never writes "our competitor is Baptist Health ...".
+    const placesOwn = [];
     for (const c of seen.values()) {
-      if (isBhOwned(c.name)) out.ownNetwork.push({ ...c, own: true });
+      if (isBhOwned(c.name)) placesOwn.push({ ...c, own: true });
       else out.competitors.push(c);
     }
 
+    // own_network comes from the FULL Yext facility cache, not from whatever
+    // Google Places happened to rank in a competitor search (that name-regex
+    // shortcut silently missed BH Diagnostic Imaging Brickell + Coral Gables
+    // on July 9). Places-derived BH hits are merged in only to supply
+    // rating/review counts for sites Yext already confirms.
+    const OWN_NETWORK_RADIUS_MI = 12; // urban ~15-20 min drive; wide enough for cannibalization reads
+    const bhAll = (typeof deps.getBHFacilities === 'function' ? deps.getBHFacilities() : []) || [];
+    const lineRes = serviceLines.map(l => ({ line: l, re: serviceLineToYextRe(l) }));
+    if (bhAll.length && origin) {
+      out.ownNetwork = bhAll
+        .filter(e => e.geocodedCoordinate?.latitude)
+        .map(e => {
+          const lat = e.geocodedCoordinate.latitude;
+          const lng = e.geocodedCoordinate.longitude;
+          const matches = lineRes.filter(({ re }) => re && re.test(e.name || '')).map(({ line }) => line);
+          return {
+            name: e.name,
+            address: e.address ? [e.address.line1, e.address.city].filter(Boolean).join(', ') : '',
+            lat, lng,
+            distance_mi: round(deps.haversineDistance(origin.lat, origin.lng, lat, lng), 1),
+            care_type: bhCareType(e.name),
+            overlapping_service_lines: matches, // non-empty = same-service BH site nearby -> cannibalization to manage
+            own: true,
+            source: 'yext',
+            drive_time_min: null,
+          };
+        })
+        .filter(e => e.distance_mi != null && e.distance_mi <= OWN_NETWORK_RADIUS_MI)
+        // Same-service sites first (the cannibalization question), then nearest.
+        .sort((a, b) => (b.overlapping_service_lines.length - a.overlapping_service_lines.length) || (a.distance_mi - b.distance_mi))
+        .slice(0, 12);
+      // Graft ratings from any Places-derived BH hits onto the Yext rows.
+      for (const po of placesOwn) {
+        const hit = out.ownNetwork.find(o => o.name && po.name &&
+          (o.name.toLowerCase().includes(po.name.toLowerCase().slice(0, 20)) ||
+           po.name.toLowerCase().includes(o.name.toLowerCase().slice(0, 20))));
+        if (hit) { hit.rating = po.rating; hit.reviews = po.reviews; hit.place_id = po.place_id; }
+        else out.ownNetwork.push(po); // Places found a BH site Yext missed - keep it
+      }
+      out.pullQuality.own_network = {
+        source: 'yext-facility-cache', cache_size: bhAll.length,
+        radius_mi: OWN_NETWORK_RADIUS_MI, found: out.ownNetwork.length,
+      };
+    } else {
+      // No cache/origin -> legacy behavior (Places-derived only) so nothing regresses.
+      out.ownNetwork = placesOwn;
+      out.pullQuality.own_network = {
+        source: 'places-fallback', cache_size: bhAll.length, found: placesOwn.length,
+        note: origin ? 'Yext facility cache empty at request time' : 'no origin - own_network needs an address',
+      };
+      if (origin && !bhAll.length) t.warnings.push('own_network fell back to Places name-matching (Yext cache empty) - footprint may be incomplete');
+    }
+
     // Drive times via batched Distance Matrix calls (10 destinations max each),
-    // batches in parallel.
-    if (include.has('drive_times') && origin && out.competitors.length) {
-      const withCoords = out.competitors.filter(c => c.lat && c.lng);
+    // batches in parallel. Own-network sites get drive times too - the
+    // cannibalization/coordination story is told in minutes, not miles.
+    if (include.has('drive_times') && origin && (out.competitors.length || out.ownNetwork.length)) {
+      const withCoords = [...out.competitors, ...out.ownNetwork].filter(c => c.lat && c.lng);
       const batches = [];
       for (let i = 0; i < withCoords.length; i += 10) batches.push(withCoords.slice(i, i + 10));
       await Promise.all(batches.map(async (batch) => {
@@ -654,6 +779,34 @@ async function buildMarketData(body, deps) {
       ? tierCompetitors(r.value.competitors)
       : null
   );
+
+  // Per-service-line tiering (additive): one tiered set per search term, each
+  // with category-appropriate drive-time caps. For convenience categories the
+  // Broader tier collapses to a one-line context summary - 20+ minute
+  // "competitors" are never table rows for a proximity-decided service.
+  const tieredByLineP = competitorsP.then(r => {
+    if (!(include.has('competitors') && include.has('drive_times'))) return null;
+    const comps = r.value.competitors || [];
+    if (!comps.length) return null;
+    const byLine = {};
+    for (const term of new Set(comps.flatMap(c => c.service_lines || [c.service_line]).filter(Boolean))) {
+      const group = comps.filter(c => (c.service_lines || [c.service_line]).includes(term));
+      const caps = categoryCapsFor(term);
+      const tiered = tierCompetitors(group, caps);
+      if (!tiered) continue;
+      tiered.caps_applied = { ...caps };
+      if (caps.dropBroader && tiered.broader.length) {
+        const names = tiered.broader.map(b => `${b.name} (${b.drive_time_min} min)`);
+        tiered.broader_context_summary =
+          `${tiered.broader.length} additional visible ${term} option(s) beyond ${caps.adjacentMax} min - ` +
+          `${names.slice(0, 4).join('; ')}${names.length > 4 ? '; …' : ''} - outside typical ${term} ` +
+          `drive tolerance; mention as context at most, never as table rows.`;
+        tiered.broader = [];
+      }
+      byLine[term] = tiered;
+    }
+    return Object.keys(byLine).length ? byLine : null;
+  });
 
   // ── BH locations near origin ──────────────────────────────────────────────
   const bhLocationsP = runBlock('bh_locations', async (t) => {
@@ -832,6 +985,7 @@ async function buildMarketData(body, deps) {
     bhLocationsP, physiciansP, permitsP, newsP, reviewThemesP,
   ]);
   const competitorsTiered = await tieredP;
+  const competitorsTieredByLine = await tieredByLineP;
   const effectiveZips = await zipsP;
 
   const tradeArea = tradeAreaR.value;
@@ -914,8 +1068,13 @@ async function buildMarketData(body, deps) {
     health_behaviors: healthBehaviors,
     competitors,
     competitors_tiered: competitorsTiered,
+    competitors_tiered_by_line: competitorsTieredByLine,
     own_network: ownNetwork,
     drive_times: driveTimes,
+    pull_quality: {
+      data_logic_version: DATA_LOGIC_VERSION,
+      competitors: competitorsR.value.pullQuality || null,
+    },
     bh_locations: bhLocations,
     physicians,
     permits,
@@ -938,6 +1097,7 @@ function round(n, d = 1) {
 // ── Simple param-keyed cache (deterministic params → identical response) ────
 function cacheKey(body) {
   const norm = {
+    v: DATA_LOGIC_VERSION, // logic changes invalidate cached responses
     zips: normalizeZips(body.zips),
     address: body.address || null,
     radius: body.radius || body.radius_minutes || null,

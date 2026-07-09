@@ -421,11 +421,13 @@ const tools = [
   },
   {
     name: 'competitor_ratings_reviews',
-    description: 'Google Places Text Search for QUICK competitor rating snapshots (stars, review count, address, place_id). NOT for full review text — use google_reviews_report for that.',
+    description: 'Google Places competitor snapshots (stars, review count, address, place_id). TWO MODES: (1) ANCHORED - pass location="lat,lng" (geocode the site address first!) and results come back NEAREST-FIRST by real distance; ALWAYS use this mode when the user names a site, address, or "near X" - it finds the small nearby competitor a fame-ranked search misses. (2) Unanchored text search (query only) ranks by prominence city-wide - only for brand-level questions with no anchor point. NOT for full review text — use google_reviews_report for that.',
     input_schema: {
       type: 'object',
       properties: {
-        query: { type: 'string', description: 'URL-encoded Google Places search query. Include location. Examples: primary+care+Pembroke+Pines+Florida' }
+        query: { type: 'string', description: 'Search term. Anchored mode: just the category, e.g. "urgent care" or "imaging center". Unanchored mode: URL-encoded query with location words, e.g. primary+care+Pembroke+Pines+Florida' },
+        location: { type: 'string', description: 'Anchor as "lat,lng" (e.g. "25.7489,-80.2377"). Switches to distance-ranked Nearby Search. Geocode the address first if needed.' },
+        max_results: { type: 'number', description: 'Anchored mode only: how many nearest results to keep (default 15).' }
       },
       required: ['query']
     }
@@ -1228,6 +1230,46 @@ async function executeTool(name, input, progressCb, ctx) {
       }
 
       case 'competitor_ratings_reviews': {
+        // Two modes:
+        // ANCHORED (input.location = "lat,lng"): Places Nearby Search ranked by
+        //   DISTANCE from the anchor - the correct mode for "competitors near this
+        //   site". Paginated to ~40 results; trimmed to the NEAREST N. Prominence
+        //   never culls a close competitor.
+        // UNANCHORED (no location): legacy city-level Text Search, byte-identical
+        //   behavior (top 10 by rating x reviews) for existing consumers.
+        const anchor = typeof input.location === 'string' && /^-?[\d.]+,-?[\d.]+$/.test(input.location.trim())
+          ? input.location.trim() : null;
+        if (anchor) {
+          const keyword = decodeURIComponent(String(input.query || '')).replace(/\+/g, ' ')
+            .replace(/\s+near\s+.+$/i, '').trim(); // tolerate a legacy "term near City FL" query
+          const base = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?key=${process.env.GOOGLE_MAPS_API_KEY}&location=${anchor}&rankby=distance&keyword=${encodeURIComponent(keyword)}`;
+          source = base.replace(process.env.GOOGLE_MAPS_API_KEY, '[KEY]');
+          let places = [];
+          let pageToken = null;
+          for (let page = 0; page < 2; page++) { // 2 pages = up to 40 nearest
+            const pageUrl = pageToken ? `${base}&pagetoken=${pageToken}` : base;
+            res = await fetchWithTimeout(pageUrl);
+            data = await res.json();
+            places.push(...(data.results || []));
+            pageToken = data.next_page_token || null;
+            if (!pageToken) break;
+            await new Promise(r => setTimeout(r, 2000)); // token needs ~2s to go live
+          }
+          // Nearby Search has `vicinity`, not `formatted_address` - normalize so
+          // downstream consumers see one shape.
+          places = places.map(p => ({ ...p, formatted_address: p.formatted_address || p.vicinity || '' }));
+          let placesFilter = null;
+          const keepNearest = Number(input.max_results) > 0 ? Number(input.max_results) : 15;
+          if (places.length > keepNearest) {
+            const before = places.length;
+            places = places.slice(0, keepNearest); // API returns nearest-first
+            placesFilter = { before, after: keepNearest, omitted: before - keepNearest, rule: `nearest ${keepNearest} by distance (rankby=distance)` };
+          }
+          return envelope('Google Places Nearby Search (distance-ranked)', source, timestamp, places, {
+            query: { search_query: keyword, anchored_to: anchor, rank_by: 'distance' },
+            filtering: placesFilter
+          });
+        }
         url = `https://maps.googleapis.com/maps/api/place/textsearch/json?key=${process.env.GOOGLE_MAPS_API_KEY}&query=${input.query}`;
         source = url.replace(process.env.GOOGLE_MAPS_API_KEY, '[KEY]');
         res = await fetchWithTimeout(url);
@@ -2567,6 +2609,10 @@ app.post('/api/market-data', makeMarketDataHandler({
   haversineDistance,
   SPECIALTY_SYNONYMS,
   demographicIndex,
+  // Full Yext facility cache (all ~396 BH facilities, paginated + refreshed
+  // 6-hourly) - the authoritative source for own_network. Never derive BH's
+  // footprint from whatever Google Places happened to rank.
+  getBHFacilities: () => bhFacilityCache,
 }));
 
 app.post('/api/chat', async (req, res) => {

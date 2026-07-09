@@ -4,7 +4,8 @@
   "description": "Baptist Health Market Research Agent v1.1 Chat UI",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test:market": "node scripts/market-data-regression.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.90.0",

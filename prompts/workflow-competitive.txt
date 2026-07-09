@@ -26,6 +26,10 @@ Search the CITY name, not the ZIP or neighborhood. A hospital in an adjacent ZIP
 
 CIRCLE 2: What urgent cares, clinics, and primary care offices are in THIS NEIGHBORHOOD?
 Now narrow to the specific area. This finds the access-layer competitors physically inside or bordering the trade area.
+ALWAYS ANCHOR THIS CIRCLE: geocode the site or trade-area center first, then call
+competitor_ratings_reviews with location="lat,lng" so results come back nearest-first
+by real distance. An unanchored text search ranks by fame city-wide and will miss the
+small competitor across the street while surfacing a famous one 25 minutes away.
 
 CIRCLE 3: For each health system you found, what is their FULL LOCAL NETWORK?
 Systems don't operate single facilities. HCA has hospitals AND MD Now urgent cares AND specialty offices. UHealth has hospitals AND co-branded Jackson urgent cares AND Walgreens retail clinics. When you find any piece of a system, search for the rest. One search per system.
