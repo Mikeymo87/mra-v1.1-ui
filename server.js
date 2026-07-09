@@ -1,4 +1,6 @@
-require('dotenv').config();
+// override:true - local .env beats any stale shell-profile exports (Replit ships
+// no .env file, so deployed Secrets are unaffected).
+require('dotenv').config({ override: true });
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
