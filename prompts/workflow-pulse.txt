@@ -137,9 +137,9 @@ OUTPUT LOCATION: ~/Desktop/Claude/MRA-Newsletter/
 FILENAME CONVENTION: insight-miner-YYYY-MM-DD.html (date = Monday of publication cycle)
 
 WEB RESEARCH APPROACH (matches MRA v2.1 architecture):
-- Use `web_research` tool (Firecrawl search) for discovery — returns titles, URLs, descriptions
-- Use `read_page` tool (Jina Reader primary, Firecrawl /scrape fallback) for full content extraction
+- Use `web_research` tool (web search) for discovery — returns titles, URLs, descriptions
+- Use `read_page` tool (Jina Reader primary, rendered-fetch fallback) for full content extraction
 - Jina Reader saves tokens by returning clean markdown instead of raw HTML
 - Pattern: search first → identify 2-3 most relevant URLs → read_page those for full detail
 - Do NOT scrape everything — be surgical. Token efficiency matters.
-- FIRECRAWL_API_KEY and OPENAI_API_KEY are already configured in MRA's .env
+- ANTHROPIC_API_KEY and OPENAI_API_KEY are already configured in MRA's .env

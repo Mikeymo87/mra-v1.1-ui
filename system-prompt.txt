@@ -238,7 +238,7 @@ WEB RESEARCH ACCURACY RULES:
 TOOLS:
 - Baptist Health Location Lookup — live Yext data by care type (includes geocodedCoordinate lat/lng)
 - Census Demographics Lookup — ACS 5-Year by county or ZIP (3 endpoints: Detailed Tables, Data Profiles, Subject Tables). Also for psychographic proxy variables.
-- Web Research — Firecrawl search. Returns titles, URLs, and short descriptions. Use for discovery: finding relevant pages, competitor news, Esri Tapestry segments, market trends. Does NOT return full page content.
+- Web Research — web search. Returns titles, URLs, and short descriptions. Use for discovery: finding relevant pages, competitor news, Esri Tapestry segments, market trends. Does NOT return full page content.
 - Read Page — Extracts full page content as markdown from a URL. Use AFTER web_research when you need detailed content from a specific result. Only read pages you actually need — do not read all search results. Translate non-English results.
 - Geocode Address — address to lat/lng (Google Geocoding)
 - Calculate Drive Times — drive time/distance (Google Distance Matrix)

@@ -1062,7 +1062,7 @@
         const sourceIcons = {
           'yext': '\u{1F4CD}', 'google': '\u{1F50D}', 'census': '\u{1F3DB}', 'cdc': '\u{1FA7A}',
           'openroute': '\u{1F697}', 'drive': '\u{1F697}', 'distance': '\u{1F697}',
-          'firecrawl': '\u{1F310}', 'places': '\u{1F50D}', 'geocod': '\u{1F4CD}',
+          'firecrawl': '\u{1F310}', 'web search': '\u{1F310}', 'web fetch': '\u{1F310}', 'programmable search': '\u{1F310}', 'jina': '\u{1F310}', 'places': '\u{1F50D}', 'geocod': '\u{1F4CD}',
         };
 
         const pillsDiv = document.createElement('div');
@@ -3131,7 +3131,7 @@ ${rendered}
         el.innerHTML = '<span class="ig-sources-label">Sources</span>';
         const tmp = document.createElement('div');
         tmp.innerHTML = marked.parse(b.markdown);
-        const srcIcons = { yext: '\u{1F4CD}', google: '\u{1F50D}', census: '\u{1F3DB}', cdc: '\u{1FA7A}', firecrawl: '\u{1F310}', outscraper: '\u{1F50D}', distance: '\u{1F697}', geocod: '\u{1F4CD}' };
+        const srcIcons = { yext: '\u{1F4CD}', google: '\u{1F50D}', census: '\u{1F3DB}', cdc: '\u{1FA7A}', firecrawl: '\u{1F310}', 'web search': '\u{1F310}', 'web fetch': '\u{1F310}', jina: '\u{1F310}', outscraper: '\u{1F50D}', distance: '\u{1F697}', geocod: '\u{1F4CD}' };
         tmp.querySelectorAll('li').forEach(li => {
           const txt = li.textContent;
           let icon = '\u{1F4C4}';

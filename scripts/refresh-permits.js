@@ -3,10 +3,10 @@
  * refresh-permits.js — Automated Permit & Construction Tracker
  *
  * Discovers healthcare construction projects in BH's 4-county Primary Service Area
- * via Firecrawl search → Jina Reader → Claude Haiku extraction → SQLite upsert.
+ * via web search (webTools provider chain) → Jina Reader → Claude extraction → SQLite upsert.
  *
  * Run: node scripts/refresh-permits.js
- * Or:  POST /api/refresh-permits (from n8n, bi-weekly Monday 9 AM)
+ * Or:  POST /api/refresh-permits (manual or a future GitHub Actions cron)
  */
 
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
@@ -17,10 +17,10 @@ const {
 } = require('../db');
 
 const anthropic = new Anthropic.default({ apiKey: process.env.ANTHROPIC_API_KEY });
+const { webSearch, fetchPageFallback } = require('../webTools');
 
 // ── Configuration ─────────────────────────────────────────────────────────────
 
-const FIRECRAWL_KEY = process.env.FIRECRAWL_API_KEY;
 const EXTRACTION_MODEL = 'claude-sonnet-4-6';
 
 const COMPETITOR_SYSTEMS = {
@@ -73,27 +73,14 @@ const CITY_COUNTY_MAP = {
   'islamorada': 'Monroe', 'tavernier': 'Monroe', 'big pine key': 'Monroe'
 };
 
-// ── Firecrawl Search ──────────────────────────────────────────────────────────
+// ── Web Search (webTools provider chain, no Firecrawl) ────────────────────────
 
-async function firecrawlSearch(query, limit = 5) {
+async function searchWeb(query, limit = 5) {
   try {
-    const res = await fetch('https://api.firecrawl.dev/v1/search', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${FIRECRAWL_KEY}`
-      },
-      body: JSON.stringify({ query, limit })
-    });
-    const json = await res.json();
-    if (!json.success || !json.data) return [];
-    return json.data.map(r => ({
-      title: r.title || '',
-      url: r.url || '',
-      description: r.description || ''
-    }));
+    const found = await webSearch(query, { limit });
+    return found.results;
   } catch (err) {
-    console.error(`[Firecrawl] Search failed: ${err.message}`);
+    console.error(`[WebSearch] Search failed: ${err.message}`);
     return [];
   }
 }
@@ -110,17 +97,9 @@ async function readPage(url) {
     const text = await res.text();
     if (text && text.length > 200) return text.slice(0, 40000);
 
-    // Fallback to Firecrawl scrape
-    const scrapeRes = await fetch('https://api.firecrawl.dev/v1/scrape', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${FIRECRAWL_KEY}`
-      },
-      body: JSON.stringify({ url, formats: ['markdown'] })
-    });
-    const scrapeJson = await scrapeRes.json();
-    return scrapeJson?.data?.markdown?.slice(0, 40000) || null;
+    // Fallback: rendered fetch for JS-heavy pages
+    const fetched = await fetchPageFallback(url);
+    return fetched.content && fetched.content.length > 200 ? fetched.content.slice(0, 40000) : null;
   } catch (err) {
     console.error(`[Jina] Read failed for ${url}: ${err.message}`);
     return null;
@@ -381,7 +360,7 @@ async function refreshPermits() {
 
     for (const query of searches) {
       console.log(`  [Search] ${query.slice(0, 80)}...`);
-      const results = await firecrawlSearch(query, 5);
+      const results = await searchWeb(query, 5);
       console.log(`    → ${results.length} results`);
 
       for (const result of results) {
