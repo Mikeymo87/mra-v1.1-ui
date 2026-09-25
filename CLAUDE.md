@@ -9,11 +9,12 @@ Baptist Health South Florida Market Research Agent. A Claude Sonnet-powered chat
 - `prompts/` — Modular prompt directory (core, reference-data, 7 workflows + intercept-writer)
 - `public/index.html` — Chat UI with SSE streaming, markdown rendering, cache-clear-on-refresh
 - `MRA-CAPABILITIES.md` — Handoff doc for Marketing Plan GPT
-- `.env` — API keys (ANTHROPIC, YEXT, CENSUS, OPENAI, GOOGLE_MAPS, DATAFORSEO_LOGIN, DATAFORSEO_PASSWORD, ORS) — never commit
+- `.env` — API keys (ANTHROPIC, YEXT, CENSUS, OPENAI, GOOGLE_MAPS, DATAFORSEO_LOGIN, DATAFORSEO_PASSWORD, ORS, MAPBOX; optional GOOGLE_CSE_KEY/GOOGLE_CSE_ID or JINA_API_KEY for free web search) — never commit
+- `webTools.js` — web search provider chain + rendered-page fetch (no Firecrawl). Tests: `npm test`. Live smoke: `npm run smoke:web`.
 
 ## Running
 ```
-cd ~/Desktop/Claude/MRA-v1.1-UI && node server.js
+cd ~/Desktop/Claude/MRA-v1.1-UI && node server.js   # npm test first; npm run smoke:web hits the live web tools
 # → http://localhost:5000
 # Refresh browser between tests to clear sessionStorage cache
 ```
@@ -25,8 +26,8 @@ cd ~/Desktop/Claude/MRA-v1.1-UI && node server.js
 ## 10 Tools
 1. Baptist Health Location Lookup (Yext) — 396 facilities, 19 categories
 2. Census Demographics Lookup — 2024→2023 auto-fallback, max 25 vars/call
-3. Web Research (Firecrawl search — returns titles, URLs, descriptions only. No full page content.)
-4. Read Page (Jina Reader → Firecrawl /scrape fallback) — extracts full markdown from a URL. Use after web_research for the 1-2 URLs that need deep reading.
+3. Web Research (`webTools.js` provider chain: Google Programmable Search if `GOOGLE_CSE_KEY`+`GOOGLE_CSE_ID` are set, else Jina Search if `JINA_API_KEY` is set, else Claude's built-in web search on `ANTHROPIC_API_KEY` (about $0.01 per search). Returns titles, URLs, descriptions only. Firecrawl removed 2026-09-25.)
+4. Read Page (Jina Reader, free and keyless; falls back to Claude's web fetch tool for JavaScript-rendered pages) — extracts full markdown from a URL. Use after web_research for the 1-2 URLs that need deep reading.
 5. Geocode Address (Google) — MUST include city name (duplicate addresses in SoFla)
 6. Calculate Drive Times (Google Distance Matrix) — flattened response, 10 destinations max per call
 7. Competitor Ratings (Google Places Text Search)
@@ -85,8 +86,11 @@ Cardio (359) | Vascular (120) | Orthop (285) | Neuro (468) | Oncol (373) | Famil
 - **Status:** v1 prototype built (Vol. 1 Issue 01, Apr 27 – May 3 2026). n8n automation next.
 
 ## What's Next
-- INTERCEPT: wire to n8n for automated weekly generation
+- INTERCEPT: automate weekly generation (n8n is cancelled; use a GitHub Actions cron like the scorecard digest)
 - Marketing Plan GPT integration (handoff doc delivered)
 - Add loading/thinking indicator to UI
 - Remove client-side Yext pre-load (API key exposed in browser)
 - Test competitor queries, reviews deep pull, isochrones
+
+## Deploying to Replit (learned 2026-09-25)
+Push to GitHub `main`, then in the Repl: Git pane fetch (the Shell's `git fetch` fails GitHub auth, the pane's works), `git merge origin/main` in the Shell, `npm install`, Republish. Verify with a chat query that forces `web_research`.

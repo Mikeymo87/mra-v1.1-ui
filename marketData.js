@@ -900,7 +900,7 @@ async function buildMarketData(body, deps) {
     }));
   }, []);
 
-  // ── Market news (Firecrawl web research) ─────────────────────────────────
+  // ── Market news (web research) ─────────────────────────────────
   // Recent market developments, competitor moves, partnerships - the qualitative
   // context the data blocks don't carry. Returned as sourced, cited items.
   const newsP = runBlock('news', async (t) => {
@@ -909,7 +909,7 @@ async function buildMarketData(body, deps) {
     const slLabel = serviceLines.length ? serviceLines.join(' and ') : 'healthcare';
     const q = `recent news and market developments in ${slLabel} near ${place} 2025 2026 new facility competitor expansion partnership merger acquisition`;
     const wr = await executeTool('web_research', { research_query: q }, null, blockCtx());
-    t.sources.add('Firecrawl Web Search');
+    t.sources.add((wr && wr._source && wr._source.api) || 'Web Search');
     const err = envelopeError(wr);
     if (err) throw new Error(err);
     const items = wr._rawData || wr.data || [];
@@ -926,7 +926,7 @@ async function buildMarketData(body, deps) {
         const rp = await executeTool('read_page', { url: n.url }, null, blockCtx());
         const content = rp._rawData?.content || rp.data?.content || '';
         const ex = newsExcerpt(content);
-        if (ex) { n.excerpt = ex; t.sources.add('Jina Reader / Firecrawl Scrape'); }
+        if (ex) { n.excerpt = ex; t.sources.add((rp && rp._source && rp._source.api) || 'Jina Reader'); }
       } catch (e) { /* keep the snippet-only item */ }
     }));
     return news;

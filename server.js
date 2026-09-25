@@ -7,6 +7,7 @@ const fs = require('fs');
 const Anthropic = require('@anthropic-ai/sdk');
 const { insertRun, updateRun, insertToolCall } = require('./db');
 const { makeMarketDataHandler } = require('./marketData');
+const { webSearch, fetchPageFallback } = require('./webTools');
 
 const app = express();
 app.use(express.json({ limit: '1mb' }));
@@ -376,7 +377,7 @@ const tools = [
   },
   {
     name: 'web_research',
-    description: 'Web search via Firecrawl. Returns titles, URLs, and short descriptions. Use for market trends, Esri Tapestry segments, competitor news, all-provider searches. Does NOT return full page content — use read_page to get full content from a specific URL. Translate non-English results to English.',
+    description: 'Web search. Returns titles, URLs, and short descriptions. Use for market trends, Esri Tapestry segments, competitor news, all-provider searches. Does NOT return full page content — use read_page to get full content from a specific URL. Translate non-English results to English.',
     input_schema: {
       type: 'object',
       properties: {
@@ -387,7 +388,7 @@ const tools = [
   },
   {
     name: 'read_page',
-    description: 'Extracts full page content as clean markdown from a specific URL. Use after web_research when you need detailed content from a result. Tries Jina Reader first (free); falls back to Firecrawl scrape for JS-heavy pages.',
+    description: 'Extracts full page content as clean markdown from a specific URL. Use after web_research when you need detailed content from a result. Tries Jina Reader first; falls back to a rendered fetch for JavaScript-heavy pages.',
     input_schema: {
       type: 'object',
       properties: {
@@ -1059,31 +1060,21 @@ async function executeTool(name, input, progressCb, ctx) {
       }
 
       case 'web_research': {
-        url = 'https://api.firecrawl.dev/v1/search';
-        source = 'Firecrawl Web Search';
-        res = await fetchWithTimeout(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.FIRECRAWL_API_KEY}` },
-          body: JSON.stringify({
-            query: input.research_query,
-            limit: 5
-          })
-        }, 60000);
-        data = await res.json();
-        if (!data.success) {
-          return envelope(source, url, timestamp, { error: data.error || 'Firecrawl search failed' }, {
+        source = 'Web Search';
+        url = 'webTools.webSearch';
+        try {
+          const found = await webSearch(input.research_query, { limit: 5 });
+          source = found.provider;
+          return envelope(source, found.providerKey, timestamp, found.results, {
+            query: { research_query: input.research_query },
+            result_count: found.results.length,
+            warnings: found.attempts.filter(a => a.error).map(a => `${a.provider} failed: ${a.error}`)
+          });
+        } catch (e) {
+          return envelope(source, url, timestamp, { error: e.message || 'Web search failed' }, {
             query: { research_query: input.research_query }
           });
         }
-        const results = (data.data || []).map(r => ({
-          title: r.title || '',
-          url: r.url || '',
-          description: r.description || ''
-        }));
-        return envelope(source, 'firecrawl.dev/v1/search', timestamp, results, {
-          query: { research_query: input.research_query },
-          result_count: results.length
-        });
       }
 
       case 'read_page': {
@@ -1106,33 +1097,27 @@ async function executeTool(name, input, progressCb, ctx) {
             }, { extractor: 'jina', content_length: markdown.length });
           }
         } catch (e) {
-          // Jina failed — fall through to Firecrawl
+          // Jina failed - fall through to the rendered fetch
         }
 
-        // Step 2: Fallback to Firecrawl /scrape (handles JS-rendered pages)
-        source = 'Firecrawl Scrape (fallback)';
-        res = await fetchWithTimeout('https://api.firecrawl.dev/v1/scrape', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${process.env.FIRECRAWL_API_KEY}`
-          },
-          body: JSON.stringify({
-            url: targetUrl,
-            formats: ['markdown'],
-            onlyMainContent: true
-          })
-        }, 60000);
-        data = await res.json();
-        if (!data.success) {
+        // Step 2: Fallback to a rendered fetch (Claude web fetch) for JS-heavy pages
+        source = 'Claude Web Fetch (fallback)';
+        try {
+          const fetched = await fetchPageFallback(targetUrl);
+          if (!fetched.content || fetched.content.length < 200) {
+            return envelope(source, targetUrl, timestamp, {
+              error: 'Could not extract readable content from this page'
+            }, { extractor: 'web_fetch_fallback', content_length: fetched.content ? fetched.content.length : 0 });
+          }
           return envelope(source, targetUrl, timestamp, {
-            error: data.error || 'Firecrawl scrape failed'
-          }, { extractor: 'firecrawl_fallback' });
+            url: targetUrl,
+            content: fetched.content.slice(0, 50000)
+          }, { extractor: 'web_fetch_fallback', content_length: fetched.content.length });
+        } catch (e) {
+          return envelope(source, targetUrl, timestamp, {
+            error: e.message || 'Could not extract readable content from this page'
+          }, { extractor: 'web_fetch_fallback' });
         }
-        return envelope(source, targetUrl, timestamp, {
-          url: targetUrl,
-          content: (data.data?.markdown || '').slice(0, 50000)
-        }, { extractor: 'firecrawl_fallback', content_length: data.data?.markdown?.length || 0 });
       }
 
       case 'resolve_bh_facility': {

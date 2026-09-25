@@ -5,7 +5,9 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test:market": "node scripts/market-data-regression.mjs"
+    "test:market": "node scripts/market-data-regression.mjs",
+    "test": "node --test tests/*.test.js",
+    "smoke:web": "node scripts/test-web-tools.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.90.0",
